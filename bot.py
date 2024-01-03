@@ -1,13 +1,15 @@
+import json
 import random
 import typing
 import discord
 import os
-from discord import app_commands
+import asyncio
+import requests
+from discord import app_commands, Embed
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime
-import asyncio
-import requests
+from dateutil.parser import parse
 
 CITY = [
     # Cities in the USA
@@ -56,6 +58,13 @@ CITY = [
     "Saint-Chamond",
     "Villeurbanne",
 ]
+
+# Create a dictionary to store birthdays
+birthdays = {}
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Join with the relative path
+file_path = os.path.join(script_dir, "data", "birthdays.json")
 
 # Load .env file
 load_dotenv()
@@ -372,17 +381,179 @@ async def weather_slash(interaction: discord.Interaction, city: str):
     weather_icon = data["weather"][0]["icon"]
 
     # Check if it will rain
-    will_rain = any(weather['main'] == 'Rain' for weather in data['weather'])
+    will_rain = any(weather["main"] == "Rain" for weather in data["weather"])
 
     embed = discord.Embed(title=f"Weather in {city.title()}")
     embed.add_field(name="Description", value=weather_description, inline=False)
     embed.add_field(name="Temperature", value=f"{temperature}°C", inline=False)
-    embed.add_field(name="Will it rain?", value="Yes" if will_rain else "No", inline=False)
+    embed.add_field(
+        name="Will it rain?", value="Yes" if will_rain else "No", inline=False
+    )
 
     # Add the weather icon to the embed
     embed.set_thumbnail(url=f"http://openweathermap.org/img/w/{weather_icon}.png")
 
     await interaction.response.send_message(embed=embed)
+
+
+async def name_autocompletion(
+    interaction: discord.Interaction, current: str
+) -> typing.List[app_commands.Choice[str]]:
+    data = []
+
+    # Add birthdays to the data list
+    for name in birthdays.keys():
+        if current.lower() in name.lower():
+            data.append(app_commands.Choice(name=name, value=name))
+
+    # Add guild members to the data list
+    for member in interaction.guild.members:
+        if current.lower() in member.name.lower():
+            data.append(app_commands.Choice(name=member.name, value=member.name))
+
+    return data
+
+
+async def action_autocompletion(
+    interaction: discord.Interaction, current: str
+) -> typing.List[app_commands.Choice[str]]:
+    actions = ["add", "delete", "display", "next"]
+    data = []
+
+    for action in actions:
+        if current.lower() in action.lower():
+            data.append(app_commands.Choice(name=action, value=action))
+
+    return data
+
+
+def load_birthdays():
+    # Load the birthdays from the file
+    with open(file_path, "r") as f:
+        return json.load(f)
+
+
+@bot.tree.command(name="birthday", description="Set your birthday")
+@app_commands.autocomplete(name=name_autocompletion)
+@app_commands.autocomplete(action=action_autocompletion)
+# Save birthdays to file whenever a birthday is added or deleted
+
+async def birthday_slash(
+    interaction: discord.Interaction,
+    action: str,
+    name: str = None,
+    birthdate: str = None,
+):
+    global birthdays
+    if action == "add":
+        if name and birthdate:
+            # Parse the birthdate in a flexible way
+            birthdate = parse(birthdate).strftime("%d/%m/%Y")
+
+            # Load the current birthdays from the file
+            birthdays = load_birthdays()
+
+            # Add the new birthday
+            birthdays[name] = birthdate
+
+            # Save the updated birthdays to the file
+            with open(file_path, "w") as f:
+                json.dump(birthdays, f)
+            embed = Embed(
+                title="Birthday Added",
+                description=f"Added birthday for {name} on {birthdate}",
+                color=0x00FF00,
+            )
+            await interaction.response.send_message(embeds=[embed])
+        else:
+            embed = Embed(
+                title="Error",
+                description="You must provide a name and birthdate to add a birthday.",
+                color=0xFF0000,
+            )
+            await interaction.response.send_message(embeds=[embed])
+    elif action == "delete":
+        if name in birthdays:
+            del birthdays[name]
+            with open(file_path, "w") as f:
+                json.dump(birthdays, f)
+            embed = Embed(
+                title="Birthday Deleted",
+                description=f"Deleted birthday for {name}",
+                color=0x00FF00,
+            )
+            await interaction.response.send_message(embeds=[embed])
+        else:
+            embed = Embed(
+                title="Error",
+                description="You must provide a valid name to delete a birthday.",
+                color=0xFF0000,
+            )
+            await interaction.response.send_message(embeds=[embed])
+    elif action == "display":
+        birthdays = load_birthdays()
+        if name:
+            if name in birthdays:
+                embed = Embed(
+                    title=f"Birthday for {name}",
+                    description=f"{name}: {birthdays[name]}",
+                    color=0x00FF00,
+                )
+            else:
+                embed = Embed(
+                    title="No Birthday Found",
+                    description=f"No birthday found for {name}.",
+                    color=0xFF0000,
+                )
+        else:
+            if birthdays:
+                embed = Embed(
+                    title="Birthdays",
+                    description="\n".join(
+                        [f"{name}: {birthdate}" for name, birthdate in birthdays.items()]
+                    ),
+                    color=0x00FF00,
+                )
+            else:
+                embed = Embed(
+                    title="No Birthdays",
+                    description="No birthdays to display.",
+                    color=0xFF0000,
+                )
+        await interaction.response.send_message(embeds=[embed])
+
+    elif action == "next":
+        if name:
+            birthdays = load_birthdays()
+            if name in birthdays:
+                birthdate = datetime.strptime(birthdays[name], "%d/%m/%Y")
+                now = datetime.now()
+                next_birthday = birthdate.replace(year=now.year)
+
+                if now > next_birthday:
+                    next_birthday = next_birthday.replace(year=now.year + 1)
+
+                days_left = (next_birthday - now).days
+                embed = Embed(
+                    title=f"Next Birthday for {name}",
+                    description=f"{days_left} days until {name}'s next birthday.",
+                    color=0x00FF00,
+                )
+                await interaction.response.send_message(embeds=[embed])
+            else:
+                embed = Embed(
+                    title="No Birthday Found",
+                    description=f"No birthday found for {name}.",
+                    color=0xFF0000,
+                )
+                await interaction.response.send_message(embeds=[embed])
+        else:
+            embed = Embed(
+                title="No Birthdays",
+                description="No birthdays to display.",
+                color=0xFF0000,
+            )
+            await interaction.response.send_message(embeds=[embed])
 
 
 @bot.event
@@ -404,6 +575,15 @@ async def on_ready():
         print(f"Synced {len(synced)} commands")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
+
+    try:
+        with open(file_path, "r") as f:
+            birthdays = json.load(f)
+            print("Loaded birthdays from file.")
+    except FileNotFoundError:
+        with open(file_path, "w") as f:
+            json.dump({}, f)  # Write an empty JSON object into the file
+        print("No birthdays json file found. Starting with an empty dictionary.")
 
 
 # Use the bot token from .env file
