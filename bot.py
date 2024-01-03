@@ -369,10 +369,18 @@ async def weather_slash(interaction: discord.Interaction, city: str):
 
     weather_description = data["weather"][0]["description"]
     temperature = data["main"]["temp"]
+    weather_icon = data["weather"][0]["icon"]
+
+    # Check if it will rain
+    will_rain = any(weather['main'] == 'Rain' for weather in data['weather'])
 
     embed = discord.Embed(title=f"Weather in {city.title()}")
     embed.add_field(name="Description", value=weather_description, inline=False)
     embed.add_field(name="Temperature", value=f"{temperature}°C", inline=False)
+    embed.add_field(name="Will it rain?", value="Yes" if will_rain else "No", inline=False)
+
+    # Add the weather icon to the embed
+    embed.set_thumbnail(url=f"http://openweathermap.org/img/w/{weather_icon}.png")
 
     await interaction.response.send_message(embed=embed)
 
