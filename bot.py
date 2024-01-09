@@ -1,5 +1,4 @@
 import json
-import random
 import typing
 import discord
 import os
@@ -561,7 +560,8 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching, name="Whatchin' you in the shower"
-        )
+        ),
+        status=discord.Status.dnd
     )
     print(f"Logged in as {bot.user.name} - {bot.user.id}")
     print(f"{bot.user.name}_BOT is ready to go !")
