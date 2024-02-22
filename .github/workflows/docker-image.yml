@@ -3,6 +3,11 @@ name: Docker Image CI
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'bot.py'
+      - 'Dockerfile'
+      - 'data/*'
+      - 'requirements.txt'
 
 jobs:
 
