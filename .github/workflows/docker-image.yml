@@ -26,3 +26,7 @@ jobs:
         file: ./Dockerfile
         push: true
         tags: getkarma/discord-bot-private:latest
+        build-args: |
+          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+      env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
