@@ -6,5 +6,3 @@ services:
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
-    volumes:
-      - ./data:/app/data
