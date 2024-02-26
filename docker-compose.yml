@@ -1,0 +1,10 @@
+version: '3'
+services:
+    discord-bot-private:
+        image: getkarma/discord-bot-private:latest
+        restart: unless-stopped
+        environment:
+            - DISCORD_TOKEN=${BOT_TOKEN}
+            - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+        volumes:
+            - ./data:/app/data
