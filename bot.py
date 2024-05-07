@@ -7,31 +7,16 @@ import requests
 from discord import app_commands, Embed
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse
+
 
 CITY = [
     # Cities in the USA
     "New York",
     "Los Angeles",
     "Chicago",
-    "Houston",
-    "Phoenix",
-    "Philadelphia",
-    "San Antonio",
-    "San Diego",
-    "Dallas",
-    "San Jose",
-    "Austin",
-    "Jacksonville",
-    "Fort Worth",
-    "Columbus",
-    "Charlotte",
     "San Francisco",
-    "Indianapolis",
-    "Seattle",
-    "Denver",
-    "Washington",
     # Cities in France
     "Paris",
     "Marseille",
@@ -45,18 +30,17 @@ CITY = [
     "Lille",
     "Rennes",
     "Reims",
-    "Cergy-Pontoise",
     "Saint-Étienne",
     "Toulon",
     "Angers",
     "Grenoble",
     "Dijon",
-    "Nîmes",
     "Aix-en-Provence",
     "Rive de Gier",
     "Saint-Chamond",
     "Villeurbanne",
 ]
+
 
 # Create a dictionary to store birthdays
 birthdays = {}
@@ -354,9 +338,13 @@ async def city_autocompletion(
 
 @bot.tree.command(name="weather", description="Get the current weather in a city")
 @app_commands.autocomplete(city=city_autocompletion)
-async def weather_slash(interaction: discord.Interaction, city: str):
+async def weather_slash(interaction: discord.Interaction, city: str, forecast: bool = False):
     api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-    base_url = "http://api.openweathermap.org/data/2.5/weather"
+
+    if forecast:
+        base_url = "http://api.openweathermap.org/data/2.5/forecast"
+    else:
+        base_url = "http://api.openweathermap.org/data/2.5/weather"
 
     response = requests.get(
         base_url,
@@ -369,18 +357,35 @@ async def weather_slash(interaction: discord.Interaction, city: str):
 
     data = response.json()
 
-    if data["cod"] != 200:
+    if int(data["cod"]) != 200:
         await interaction.response.send_message(
-            f"Error: {data['message']}", ephemeral=True
+            f"Error: {data.get('message', 'Unknown error')}", ephemeral=True
         )
         return
 
-    weather_description = data["weather"][0]["description"]
-    temperature = data["main"]["temp"]
-    weather_icon = data["weather"][0]["icon"]
+    if forecast:
+        # Get the forecast for tomorrow
+        tomorrow = datetime.now() + timedelta(days=1)
+        tomorrow_forecast = next(
+            (item for item in data["list"] if datetime.fromtimestamp(item["dt"]).date() == tomorrow.date()), 
+            None
+        )
 
-    # Check if it will rain
-    will_rain = any(weather["main"] == "Rain" for weather in data["weather"])
+        if tomorrow_forecast is None:
+            await interaction.response.send_message(
+                f"No forecast data available for tomorrow in {city.title()}", ephemeral=True
+            )
+            return
+
+        weather_description = tomorrow_forecast["weather"][0]["description"]
+        temperature = tomorrow_forecast["main"]["temp"]
+        weather_icon = tomorrow_forecast["weather"][0]["icon"]
+        will_rain = any(weather["main"] == "Rain" for weather in tomorrow_forecast["weather"])
+    else:
+        weather_description = data["weather"][0]["description"]
+        temperature = data["main"]["temp"]
+        weather_icon = data["weather"][0]["icon"]
+        will_rain = any(weather["main"] == "Rain" for weather in data["weather"])
 
     embed = discord.Embed(title=f"Weather in {city.title()}")
     embed.add_field(name="Description", value=weather_description, inline=False)
@@ -393,8 +398,6 @@ async def weather_slash(interaction: discord.Interaction, city: str):
     embed.set_thumbnail(url=f"http://openweathermap.org/img/w/{weather_icon}.png")
 
     await interaction.response.send_message(embed=embed)
-
-
 async def name_autocompletion(
     interaction: discord.Interaction, current: str
 ) -> typing.List[app_commands.Choice[str]]:
