@@ -339,7 +339,6 @@ async def city_autocompletion(
 @bot.tree.command(name="weather", description="Get the current weather in a city")
 @app_commands.autocomplete(city=city_autocompletion)
 async def weather_slash(interaction: discord.Interaction, city: str, forecast: bool = False):
-    api_key = os.getenv("OPENWEATHERMAP_API_KEY")
 
     if forecast:
         base_url = "http://api.openweathermap.org/data/2.5/forecast"
@@ -591,7 +590,8 @@ async def on_ready():
 
 # Use the bot token from .env file
 bot_token = os.getenv("BOT_TOKEN")
-if bot_token is None:
-    print("Bot token is not set in the environment variables.")
+api_key = os.getenv("OPENWEATHERMAP_API_KEY")
+if bot_token or api_key is None:
+    print("Bot token or api_key is not set in the environment variables.")
 else:
     bot.run(bot_token)
