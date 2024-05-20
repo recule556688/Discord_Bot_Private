@@ -4,6 +4,7 @@ import discord
 import os
 import asyncio
 import requests
+import logging
 from discord import app_commands, Embed
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -338,7 +339,9 @@ async def city_autocompletion(
 
 @bot.tree.command(name="weather", description="Get the current weather in a city")
 @app_commands.autocomplete(city=city_autocompletion)
-async def weather_slash(interaction: discord.Interaction, city: str, forecast: bool = False):
+async def weather_slash(
+    interaction: discord.Interaction, city: str, forecast: bool = False
+):
 
     if forecast:
         base_url = "http://api.openweathermap.org/data/2.5/forecast"
@@ -366,20 +369,27 @@ async def weather_slash(interaction: discord.Interaction, city: str, forecast: b
         # Get the forecast for tomorrow
         tomorrow = datetime.now() + timedelta(days=1)
         tomorrow_forecast = next(
-            (item for item in data["list"] if datetime.fromtimestamp(item["dt"]).date() == tomorrow.date()), 
-            None
+            (
+                item
+                for item in data["list"]
+                if datetime.fromtimestamp(item["dt"]).date() == tomorrow.date()
+            ),
+            None,
         )
 
         if tomorrow_forecast is None:
             await interaction.response.send_message(
-                f"No forecast data available for tomorrow in {city.title()}", ephemeral=True
+                f"No forecast data available for tomorrow in {city.title()}",
+                ephemeral=True,
             )
             return
 
         weather_description = tomorrow_forecast["weather"][0]["description"]
         temperature = tomorrow_forecast["main"]["temp"]
         weather_icon = tomorrow_forecast["weather"][0]["icon"]
-        will_rain = any(weather["main"] == "Rain" for weather in tomorrow_forecast["weather"])
+        will_rain = any(
+            weather["main"] == "Rain" for weather in tomorrow_forecast["weather"]
+        )
     else:
         weather_description = data["weather"][0]["description"]
         temperature = data["main"]["temp"]
@@ -397,6 +407,8 @@ async def weather_slash(interaction: discord.Interaction, city: str, forecast: b
     embed.set_thumbnail(url=f"http://openweathermap.org/img/w/{weather_icon}.png")
 
     await interaction.response.send_message(embed=embed)
+
+
 async def name_autocompletion(
     interaction: discord.Interaction, current: str
 ) -> typing.List[app_commands.Choice[str]]:
@@ -438,6 +450,7 @@ def load_birthdays():
 @app_commands.autocomplete(name=name_autocompletion)
 @app_commands.autocomplete(action=action_autocompletion)
 # Save birthdays to file whenever a birthday is added or deleted
+
 
 async def birthday_slash(
     interaction: discord.Interaction,
@@ -511,7 +524,10 @@ async def birthday_slash(
                 embed = Embed(
                     title="Birthdays",
                     description="\n".join(
-                        [f"{name}: {birthdate}" for name, birthdate in birthdays.items()]
+                        [
+                            f"{name}: {birthdate}"
+                            for name, birthdate in birthdays.items()
+                        ]
                     ),
                     color=0x00FF00,
                 )
@@ -558,12 +574,25 @@ async def birthday_slash(
 
 
 @bot.event
+async def on_message(message):
+    # Don't log messages sent by the bot itself
+    if message.author == bot.user:
+        return
+
+    # Log the message content and the author's name in the console
+    print(f"{message.author.name}: {message.content}")
+
+    # Don't forget to process commands after handling the on_message event
+    await bot.process_commands(message)
+
+
+@bot.event
 async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching, name="Whatchin' you in the shower"
         ),
-        status=discord.Status.dnd
+        status=discord.Status.dnd,
     )
     print(f"Logged in as {bot.user.name} - {bot.user.id}")
     print(f"{bot.user.name}_BOT is ready to go !")
@@ -588,10 +617,54 @@ async def on_ready():
         print("No birthdays json file found. Starting with an empty dictionary.")
 
 
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # Create a dictionary with the message data
+    message_data = {
+        "user": message.author.name,
+        "message": message.content,
+        "time": message.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "attachments": [attachment.url for attachment in message.attachments],
+        "guild": message.guild.name if message.guild else "Direct Message",
+    }
+
+    # Open the log file in append mode and write the message data
+    with open("message_logs.ndjson", "a") as f:
+        f.write(json.dumps(message_data) + "\n")
+
+    await bot.process_commands(message)
+
+
+@bot.event
+async def on_message_edit(before, after):
+    if before.author == bot.user:
+        return
+
+    # Create a dictionary with the message data
+    edit_data = {
+        "user": before.author.name,
+        "old_message": before.content,
+        "new_message": after.content,
+        "time": (
+            after.edited_at.strftime("%Y-%m-%d %H:%M:%S")
+            if after.edited_at
+            else before.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        ),
+        "guild": before.guild.name if before.guild else "Direct Message",
+    }
+
+    # Open the log file in append mode and write the message data
+    with open("message_logs.ndjson", "a") as f:
+        f.write(json.dumps(edit_data) + "\n")
+
+
 # Use the bot token from .env file
 bot_token = os.getenv("BOT_TOKEN")
 api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-if bot_token or api_key is None:
+if bot_token is None or api_key is None:
     print("Bot token or api_key is not set in the environment variables.")
 else:
     bot.run(bot_token)
