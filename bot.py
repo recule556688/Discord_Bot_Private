@@ -5,11 +5,13 @@ import os
 import asyncio
 import requests
 import logging
-from discord import app_commands, Embed
+from discord import app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from dateutil.parser import parse
+from Crypto.Cipher import AES
+import base64
 
 
 CITY = [
@@ -617,6 +619,18 @@ async def on_ready():
         print("No birthdays json file found. Starting with an empty dictionary.")
 
 
+def encrypt_json(data, key):
+    cipher = AES.new(key, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
+    json_val = [base64.b64encode(x).decode('utf-8') for x in (cipher.nonce, ciphertext, tag)]
+    return json_val
+
+def decrypt_json(json_val, key):
+    nonce, ciphertext, tag = [base64.b64decode(x.encode('utf-8')) for x in json_val]
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    data = cipher.decrypt_and_verify(ciphertext, tag)
+    return json.loads(data)
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -631,9 +645,12 @@ async def on_message(message):
         "guild": message.guild.name if message.guild else "Direct Message",
     }
 
-    # Open the log file in append mode and write the message data
+    # Encrypt the message data
+    encrypted_data = encrypt_json(message_data, key)
+
+    # Open the log file in append mode and write the encrypted message data
     with open("message_logs.ndjson", "a") as f:
-        f.write(json.dumps(message_data) + "\n")
+        f.write(json.dumps(encrypted_data) + "\n")
 
     await bot.process_commands(message)
 
@@ -656,15 +673,79 @@ async def on_message_edit(before, after):
         "guild": before.guild.name if before.guild else "Direct Message",
     }
 
-    # Open the log file in append mode and write the message data
+    # Encrypt the message data
+    encrypted_data = encrypt_json(edit_data, key)
+
+    # Open the log file in append mode and write the encrypted message data
     with open("message_logs.ndjson", "a") as f:
-        f.write(json.dumps(edit_data) + "\n")
+        f.write(json.dumps(encrypted_data) + "\n")
+
+
+class LogEmbed(ui.View):
+    def __init__(self, logs):
+        super().__init__()
+        self.logs = logs
+        self.current_page = 0
+
+    @ui.button(label="Previous", style=ButtonStyle.primary)
+    async def previous_button(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    @ui.button(label="Next", style=ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page < len(self.logs) - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    def get_embed(self):
+        log = self.logs[self.current_page]
+        embed = Embed(title=f"Log {self.current_page + 1}", color=Colour.dark_purple())
+        embed.set_thumbnail(
+            url="https://cdn.discordapp.com/attachments/1190690414190153750/1242135381592506400/logo.png?ex=664cbc38&is=664b6ab8&hm=2571cd16ba78b4f5f4477d00dde90b04cd675e5c66054deaaade14335c0ded78&"
+        )  # Set a thumbnail image
+        embed.set_footer(text="Tess Spy Agency")  # Set a footer text
+        embed.timestamp = datetime.now()  # Set a timestamp
+        for k, v in log.items():
+            v = str(v)
+            while len(v) > 0:
+                embed.add_field(name=k, value=v[:1024], inline=False)  # Add fields for each log item
+                v = v[1024:]
+
+        return embed
+
+@bot.tree.command(
+    name="read_logs",
+    description="Read the content of the message logs",
+)
+@is_owner()  # Only allow the owner to read logs
+async def read_logs_slash(interaction: discord.Interaction):
+    # Open the log file in read mode
+    with open("message_logs.ndjson", "r") as f:
+        # Read the file content
+        logs = f.readlines()
+
+    # Decrypt each log entry and append to a list
+    decrypted_logs = [decrypt_json(json.loads(log), key) for log in logs]
+
+    # Create the view with the logs
+    view = LogEmbed(decrypted_logs)
+
+    # Send the first log as a response with the view
+    await interaction.response.send_message(embed=view.get_embed(), view=view)
 
 
 # Use the bot token from .env file
 bot_token = os.getenv("BOT_TOKEN")
 api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-if bot_token is None or api_key is None:
-    print("Bot token or api_key is not set in the environment variables.")
+# Load the key from .env
+key_str = os.getenv("ENCRYPTION_KEY")
+# Convert the key back to bytes
+key = base64.b64decode(key_str)
+if bot_token is None or api_key is None or key_str is None:
+    print(
+        "Bot token or api_key or ENCRYPTION_KEY is not set in the environment variables."
+    )
 else:
     bot.run(bot_token)
