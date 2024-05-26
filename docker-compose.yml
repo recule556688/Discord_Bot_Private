@@ -3,7 +3,7 @@ services:
   bot:
     image: getkarma/discord-bot-private:latest
     volumes:
-      - .:/app
+      - /home/karma/docker/Bot/Discord_Bot_Private:/app
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
