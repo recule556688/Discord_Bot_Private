@@ -6,4 +6,4 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app
+      - /home/karma/docker/Bot/Discord_Bot_Private:/app

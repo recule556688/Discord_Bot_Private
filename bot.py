@@ -4,7 +4,6 @@ import discord
 import os
 import asyncio
 import requests
-import logging
 from discord import app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
