@@ -3,8 +3,7 @@ services:
   discord-bot-private:
     image: getkarma/discord-bot-private:latest
     restart: unless-stopped
-    environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+    env_file:
+      - .env
     volumes:
-      - ./data:/app/data
+      - ./data:/app

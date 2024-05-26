@@ -1,25 +1,20 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim-buster
+FROM python:3.9-slim-buster
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
-# Set work directory in the container
+# Set the working directory in the container to /app
 WORKDIR /app
 
+# Copy the current directory contents into the container at /app
+COPY . /app
+
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc \
-        default-libmysqlclient-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y
 
-# Install python dependencies
-COPY requirements.txt /app/
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the current directory contents into the container
-COPY . /app/
 
 # Run the bot when the container launches
 CMD ["python", "bot.py"]

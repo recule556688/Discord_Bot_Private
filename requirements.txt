@@ -1,12 +1,5 @@
 discord
-dotenv
-datetime
-dateutil
-Crypto
-base64
-json
-typing
-os
-asyncio
+python-dotenv==1.0.0
+python-dateutil
+cryptography
 requests
-logging
