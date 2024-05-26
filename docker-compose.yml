@@ -1,9 +1,10 @@
-version: "3"
+version: '3'
 services:
-  discord-bot-private:
+  bot:
     image: getkarma/discord-bot-private:latest
-    restart: unless-stopped
-    env_file:
-      - .env
     volumes:
-      - /home/karma/docker/Bot/Discord_Bot_Private:/app
+      - .:/app
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
