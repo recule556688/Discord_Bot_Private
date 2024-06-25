@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  bot:
+    image: getkarma/discord-bot-private:latest
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    user: "10001:10001"
+    restart: unless-stopped
+    container_name: karma-private-bot

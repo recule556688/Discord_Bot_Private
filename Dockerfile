@@ -1,14 +1,45 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim-buster
+# syntax=docker/dockerfile:1
 
-# Set the working directory in the container to /app
+ARG PYTHON_VERSION=3.10.7
+FROM python:${PYTHON_VERSION}-slim as base
+
+# Prevents Python from writing pyc files.
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Keeps Python from buffering stdout and stderr to avoid situations where
+# the application crashes without emitting any logs due to buffering.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Add the current directory contents into the container at /app
-ADD . /app
+# Create a non-privileged user that the app will run under.
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Download dependencies as a separate step to take advantage of Docker's caching.
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r requirements.txt
 
-# Run bot.py when the container launches
-CMD ["python", "bot.py"]
+# Copy the source code and startup script into the container.
+COPY . .
+COPY startup.sh .
+
+# Ensure the startup script is executable
+RUN chmod +x startup.sh
+
+# Ensure the data directory exists and has the right permissions
+RUN mkdir -p /app/data && chmod -R 777 /app/data
+
+# Switch to the non-privileged user to run the application.
+USER appuser
+
+# Run the application using the startup script.
+CMD ["./startup.sh"]
