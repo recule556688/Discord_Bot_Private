@@ -4,6 +4,7 @@ import discord
 import os
 import asyncio
 import requests
+import logging
 from discord import app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -11,15 +12,35 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse
 from Crypto.Cipher import AES
 import base64
+from clean_log_file import clean_log_file
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+
+
+# Function to encrypt JSON data
+def encrypt_json(data, key):
+    cipher = AES.new(key, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
+    json_val = [
+        base64.b64encode(x).decode("utf-8") for x in (cipher.nonce, ciphertext, tag)
+    ]
+    return json_val
+
+
+# Function to decrypt JSON data
+def decrypt_json(json_val, key):
+    nonce, ciphertext, tag = [base64.b64decode(x.encode("utf-8")) for x in json_val]
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    data = cipher.decrypt_and_verify(ciphertext, tag)
+    return json.loads(data)
 
 
 CITY = [
-    # Cities in the USA
     "New York",
     "Los Angeles",
     "Chicago",
     "San Francisco",
-    # Cities in France
     "Paris",
     "Marseille",
     "Lyon",
@@ -42,7 +63,6 @@ CITY = [
     "Saint-Chamond",
     "Villeurbanne",
 ]
-
 
 # Create a dictionary to store birthdays
 birthdays = {}
@@ -80,7 +100,7 @@ async def ping_slash(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="owner",
-    description="this command is only for the owner of the server",
+    description="This command is only for the owner of the server",
 )
 @is_owner()
 async def owner_slash(interaction: discord.Interaction):
@@ -98,20 +118,20 @@ async def check_time():
     global scheduled_message
     if scheduled_message["user"] is not None:
         # Get the current date and time
-        now = datetime.datetime.now()
+        now = datetime.now()
         # Get the scheduled date and time
-        scheduled_time = datetime.datetime.strptime(
-            scheduled_message["time"], "%Y-%m-%d %Hh%M"
-        )
+        scheduled_time = datetime.strptime(scheduled_message["time"], "%Y-%m-%d %Hh%M")
         # Check if the current date and time match or are later than the scheduled date and time
         if now >= scheduled_time:
             try:
                 await scheduled_message["user"].send(scheduled_message["message"])
-                print(f"Successfully sent message to {scheduled_message['user'].name}.")
+                logging.info(
+                    f"Successfully sent message to {scheduled_message['user'].name}."
+                )
                 # Reset the scheduled message
                 scheduled_message = {"user": None, "message": "", "time": ""}
             except discord.Forbidden:
-                print(
+                logging.error(
                     f"Failed to send a DM to {scheduled_message['user'].name}. They might have DMs disabled or the bot doesn't share a server with them."
                 )
 
@@ -128,12 +148,9 @@ async def dm_slash(
     time: str = None,
 ):
     if time is not None:
-        # Check if the time string contains a date
         if " " not in time:
-            # Prepend today's date to the time
-            today = datetime.date.today().strftime("%Y-%m-%d")
+            today = datetime.today().strftime("%Y-%m-%d")
             time = f"{today} {time}"
-        # Schedule the message
         global scheduled_message
         scheduled_message["user"] = user
         scheduled_message["message"] = message
@@ -142,13 +159,11 @@ async def dm_slash(
             f"Message to {user.name} scheduled for {time}.", ephemeral=True
         )
     else:
-        # Send the message immediately
         await interaction.response.defer()
         for _ in range(times):
             try:
                 await user.send(message)
-                await asyncio.sleep(0.5)  # Add a delay of 0.5 second
-
+                await asyncio.sleep(0.5)
             except discord.Forbidden:
                 await interaction.edit_original_response(
                     content=f"Failed to send a DM to {user.name}. They might have DMs disabled or the bot doesn't share a server with them.",
@@ -171,7 +186,6 @@ async def dm_slash(
 async def cancel_dm_slash(interaction: discord.Interaction):
     global scheduled_message
     if scheduled_message["user"] is not None:
-        # Reset the scheduled message
         scheduled_message = {"user": None, "message": "", "time": ""}
         await interaction.response.send_message(
             "Scheduled message cancelled.", ephemeral=True
@@ -213,9 +227,7 @@ async def avatar_slash(
     user: discord.User = None,
     hide_message: bool = True,
 ):
-    user = (
-        user or interaction.user
-    )  # if no user is provided, use the user who invoked the command
+    user = user or interaction.user
     avatar_url = user.avatar.url
 
     embed = discord.Embed(
@@ -305,9 +317,7 @@ async def cat_slash(
     number_of_images: int = 1,
     hide_message: bool = True,
 ):
-    number_of_images = max(
-        min(number_of_images, 5), 1
-    )  # Limit the number of images between 1 and 5
+    number_of_images = max(min(number_of_images, 5), 1)
 
     for i in range(number_of_images):
         response = requests.get(
@@ -343,7 +353,6 @@ async def city_autocompletion(
 async def weather_slash(
     interaction: discord.Interaction, city: str, forecast: bool = False
 ):
-
     if forecast:
         base_url = "http://api.openweathermap.org/data/2.5/forecast"
     else:
@@ -367,7 +376,6 @@ async def weather_slash(
         return
 
     if forecast:
-        # Get the forecast for tomorrow
         tomorrow = datetime.now() + timedelta(days=1)
         tomorrow_forecast = next(
             (
@@ -403,8 +411,6 @@ async def weather_slash(
     embed.add_field(
         name="Will it rain?", value="Yes" if will_rain else "No", inline=False
     )
-
-    # Add the weather icon to the embed
     embed.set_thumbnail(url=f"http://openweathermap.org/img/w/{weather_icon}.png")
 
     await interaction.response.send_message(embed=embed)
@@ -415,12 +421,10 @@ async def name_autocompletion(
 ) -> typing.List[app_commands.Choice[str]]:
     data = []
 
-    # Add birthdays to the data list
     for name in birthdays.keys():
         if current.lower() in name.lower():
             data.append(app_commands.Choice(name=name, value=name))
 
-    # Add guild members to the data list
     for member in interaction.guild.members:
         if current.lower() in member.name.lower():
             data.append(app_commands.Choice(name=member.name, value=member.name))
@@ -442,7 +446,6 @@ async def action_autocompletion(
 
 
 def load_birthdays():
-    # Load the birthdays from the file
     with open(file_path, "r") as f:
         return json.load(f)
 
@@ -450,9 +453,6 @@ def load_birthdays():
 @bot.tree.command(name="birthday", description="Set your birthday")
 @app_commands.autocomplete(name=name_autocompletion)
 @app_commands.autocomplete(action=action_autocompletion)
-# Save birthdays to file whenever a birthday is added or deleted
-
-
 async def birthday_slash(
     interaction: discord.Interaction,
     action: str,
@@ -462,16 +462,9 @@ async def birthday_slash(
     global birthdays
     if action == "add":
         if name and birthdate:
-            # Parse the birthdate in a flexible way
             birthdate = parse(birthdate).strftime("%d/%m/%Y")
-
-            # Load the current birthdays from the file
             birthdays = load_birthdays()
-
-            # Add the new birthday
             birthdays[name] = birthdate
-
-            # Save the updated birthdays to the file
             with open(file_path, "w") as f:
                 json.dump(birthdays, f)
             embed = Embed(
@@ -539,7 +532,6 @@ async def birthday_slash(
                     color=0xFF0000,
                 )
         await interaction.response.send_message(embeds=[embed])
-
     elif action == "next":
         if name:
             birthdays = load_birthdays()
@@ -547,10 +539,8 @@ async def birthday_slash(
                 birthdate = datetime.strptime(birthdays[name], "%d/%m/%Y")
                 now = datetime.now()
                 next_birthday = birthdate.replace(year=now.year)
-
                 if now > next_birthday:
                     next_birthday = next_birthday.replace(year=now.year + 1)
-
                 days_left = (next_birthday - now).days
                 embed = Embed(
                     title=f"Next Birthday for {name}",
@@ -576,66 +566,9 @@ async def birthday_slash(
 
 @bot.event
 async def on_message(message):
-    # Don't log messages sent by the bot itself
     if message.author == bot.user:
         return
 
-    # Log the message content and the author's name in the console
-    print(f"{message.author.name}: {message.content}")
-
-    # Don't forget to process commands after handling the on_message event
-    await bot.process_commands(message)
-
-
-@bot.event
-async def on_ready():
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching, name="Whatchin' you in the shower"
-        ),
-        status=discord.Status.dnd,
-    )
-    print(f"Logged in as {bot.user.name} - {bot.user.id}")
-    print(f"{bot.user.name}_BOT is ready to go !")
-    check_time.start()
-    global start_time
-    start_time = datetime.utcnow()
-    print(f"Bot started at {start_time}")
-
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} commands")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
-
-    try:
-        with open(file_path, "r") as f:
-            birthdays = json.load(f)
-            print("Loaded birthdays from file.")
-    except FileNotFoundError:
-        with open(file_path, "w") as f:
-            json.dump({}, f)  # Write an empty JSON object into the file
-        print("No birthdays json file found. Starting with an empty dictionary.")
-
-
-def encrypt_json(data, key):
-    cipher = AES.new(key, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
-    json_val = [base64.b64encode(x).decode('utf-8') for x in (cipher.nonce, ciphertext, tag)]
-    return json_val
-
-def decrypt_json(json_val, key):
-    nonce, ciphertext, tag = [base64.b64decode(x.encode('utf-8')) for x in json_val]
-    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
-    data = cipher.decrypt_and_verify(ciphertext, tag)
-    return json.loads(data)
-
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    # Create a dictionary with the message data
     message_data = {
         "user": message.author.name,
         "message": message.content,
@@ -644,11 +577,9 @@ async def on_message(message):
         "guild": message.guild.name if message.guild else "Direct Message",
     }
 
-    # Encrypt the message data
     encrypted_data = encrypt_json(message_data, key)
 
-    # Open the log file in append mode and write the encrypted message data
-    with open("message_logs.ndjson", "a") as f:
+    with open("data/message_logs.ndjson", "a") as f:
         f.write(json.dumps(encrypted_data) + "\n")
 
     await bot.process_commands(message)
@@ -659,7 +590,6 @@ async def on_message_edit(before, after):
     if before.author == bot.user:
         return
 
-    # Create a dictionary with the message data
     edit_data = {
         "user": before.author.name,
         "old_message": before.content,
@@ -672,11 +602,9 @@ async def on_message_edit(before, after):
         "guild": before.guild.name if before.guild else "Direct Message",
     }
 
-    # Encrypt the message data
     encrypted_data = encrypt_json(edit_data, key)
 
-    # Open the log file in append mode and write the encrypted message data
-    with open("message_logs.ndjson", "a") as f:
+    with open("data/message_logs.ndjson", "a") as f:
         f.write(json.dumps(encrypted_data) + "\n")
 
 
@@ -687,63 +615,128 @@ class LogEmbed(ui.View):
         self.current_page = 0
 
     @ui.button(label="Previous", style=ButtonStyle.primary)
-    async def previous_button(self, interaction: discord.Interaction, button: ui.Button):
-        if self.current_page > 0:
-            self.current_page -= 1
-            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+    async def previous_button(
+        self, interaction: discord.Interaction, button: ui.Button
+    ):
+        try:
+            if self.current_page > 0:
+                self.current_page -= 1
+                await interaction.response.edit_message(
+                    embed=self.get_embed(), view=self
+                )
+            else:
+                await interaction.response.send_message(
+                    "You are already on the first page.", ephemeral=True
+                )
+        except Exception as e:
+            logging.error(f"Error in previous_button: {e}")
+            await interaction.response.send_message(
+                "An error occurred.", ephemeral=True
+            )
 
     @ui.button(label="Next", style=ButtonStyle.primary)
     async def next_button(self, interaction: discord.Interaction, button: ui.Button):
-        if self.current_page < len(self.logs) - 1:
-            self.current_page += 1
-            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        try:
+            if self.current_page < len(self.logs) - 1:
+                self.current_page += 1
+                await interaction.response.edit_message(
+                    embed=self.get_embed(), view=self
+                )
+            else:
+                await interaction.response.send_message(
+                    "You are already on the last page.", ephemeral=True
+                )
+        except Exception as e:
+            logging.error(f"Error in next_button: {e}")
+            await interaction.response.send_message(
+                "An error occurred.", ephemeral=True
+            )
 
     def get_embed(self):
         log = self.logs[self.current_page]
         embed = Embed(title=f"Log {self.current_page + 1}", color=Colour.dark_purple())
         embed.set_thumbnail(
             url="https://cdn.discordapp.com/attachments/1190690414190153750/1242135381592506400/logo.png?ex=664cbc38&is=664b6ab8&hm=2571cd16ba78b4f5f4477d00dde90b04cd675e5c66054deaaade14335c0ded78&"
-        )  # Set a thumbnail image
-        embed.set_footer(text="Tess Spy Agency")  # Set a footer text
-        embed.timestamp = datetime.now()  # Set a timestamp
+        )
+        embed.set_footer(text="Tess Spy Agency")
+        embed.timestamp = datetime.now()
         for k, v in log.items():
             v = str(v)
             while len(v) > 0:
-                embed.add_field(name=k, value=v[:1024], inline=False)  # Add fields for each log item
+                embed.add_field(name=k, value=v[:1024], inline=False)
                 v = v[1024:]
-
         return embed
+
 
 @bot.tree.command(
     name="read_logs",
     description="Read the content of the message logs",
 )
-@is_owner()  # Only allow the owner to read logs
+@is_owner()
 async def read_logs_slash(interaction: discord.Interaction):
-    # Open the log file in read mode
-    with open("message_logs.ndjson", "r") as f:
-        # Read the file content
+    with open("data/message_logs.ndjson", "r") as f:
         logs = f.readlines()
 
-    # Decrypt each log entry and append to a list
-    decrypted_logs = [decrypt_json(json.loads(log), key) for log in logs]
+    decrypted_logs = []
+    for log in logs:
+        try:
+            decrypted_log = decrypt_json(json.loads(log), key)
+            decrypted_logs.append(decrypted_log)
+        except json.JSONDecodeError as e:
+            logging.error(f"Error decoding JSON: {e} - Log: {log}")
+        except ValueError as e:
+            logging.error(f"Error decrypting log: {e} - Log: {log}")
 
-    # Create the view with the logs
-    view = LogEmbed(decrypted_logs)
+    if decrypted_logs:
+        view = LogEmbed(decrypted_logs)
+        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
+    else:
+        await interaction.response.send_message("No valid logs found.", ephemeral=True)
 
-    # Send the first log as a response with the view
-    await interaction.response.send_message(embed=view.get_embed(), view=view)
+
+@bot.event
+async def on_ready():
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.watching, name="Watching you in the shower"
+        ),
+        status=discord.Status.dnd,
+    )
+    try:
+        clean_log_file()
+        logging.info("Successfully cleaned the log file.")
+    except Exception as e:
+        logging.error(f"Failed to clean the log file: {e}")
+    logging.info(f"Logged in as {bot.user.name} - {bot.user.id}")
+    logging.info(f"{bot.user.name}_BOT is ready to go !")
+    check_time.start()
+    global start_time
+    start_time = datetime.utcnow()
+    logging.info(f"Bot started at {start_time}")
+
+    try:
+        synced = await bot.tree.sync()
+        logging.info(f"Synced {len(synced)} commands")
+    except Exception as e:
+        logging.error(f"Failed to sync commands: {e}")
+
+    try:
+        with open(file_path, "r") as f:
+            birthdays = json.load(f)
+            logging.info("Loaded birthdays from file.")
+    except FileNotFoundError:
+        with open(file_path, "w") as f:
+            json.dump({}, f)
+        logging.info("No birthdays json file found. Starting with an empty dictionary.")
 
 
 # Use the bot token from .env file
 bot_token = os.getenv("BOT_TOKEN")
 api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-# Load the key from .env
 key_str = os.getenv("ENCRYPTION_KEY")
-# Convert the key back to bytes
 key = base64.b64decode(key_str)
 if bot_token is None or api_key is None or key_str is None:
-    print(
+    logging.error(
         "Bot token or api_key or ENCRYPTION_KEY is not set in the environment variables."
     )
 else:
