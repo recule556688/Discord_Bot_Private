@@ -673,7 +673,7 @@ class LogEmbed(ui.View):
     description="Read the content of the message logs",
 )
 @is_owner()
-async def read_logs_slash(interaction: discord.Interaction):
+async def read_logs_slash(interaction: discord.Interaction, hide_message: bool = False):
     with open("data/message_logs.ndjson", "r") as f:
         logs = f.readlines()
 
@@ -689,9 +689,9 @@ async def read_logs_slash(interaction: discord.Interaction):
 
     if decrypted_logs:
         view = LogEmbed(decrypted_logs)
-        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
+        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=hide_message)
     else:
-        await interaction.response.send_message("No valid logs found.", ephemeral=True)
+        await interaction.response.send_message("No valid logs found.", ephemeral=hide_message)
 
 
 @bot.event
