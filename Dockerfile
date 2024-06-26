@@ -28,18 +28,14 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install -r requirements.txt
 
-# Copy the source code and startup script into the container.
+# Copy the source code into the container.
 COPY . .
-COPY startup.sh .
-
-# Ensure the startup script is executable
-RUN chmod +x startup.sh
 
 # Ensure the data directory exists and has the right permissions
-RUN mkdir -p /app/data && chmod -R 777 /app/data
+RUN mkdir -p /app/data && chmod -R 777 /app/data && touch /app/data/message_logs.ndjson && chmod 666 /app/data/message_logs.ndjson
 
 # Switch to the non-privileged user to run the application.
 USER appuser
 
-# Run the application using the startup script.
-CMD ["./startup.sh"]
+# Run the application.
+CMD ["python", "bot.py"]
