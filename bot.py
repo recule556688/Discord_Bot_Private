@@ -80,13 +80,18 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 
+ADDITIONAL_ALLOWED_USER_ID = 766746672964567052  # Replace with the actual user ID
+
 def is_owner():
     def predicate(interaction: discord.Interaction):
-        if interaction.user.id == interaction.guild.owner.id:
-            return True
+        # Check if the user is the server owner
+        is_server_owner = interaction.user.id == interaction.guild.owner.id
+        # Check if the user is the additional allowed user
+        is_additional_user = interaction.user.id == ADDITIONAL_ALLOWED_USER_ID
+        # Allow if the user is either the server owner or the additional allowed user
+        return is_server_owner or is_additional_user
 
     return app_commands.check(predicate)
-
 
 @bot.tree.command(
     name="ping",
