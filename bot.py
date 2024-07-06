@@ -932,7 +932,7 @@ async def main():
         logging.error(
             "Bot token, api_weather, or ENCRYPTION_KEY is not set in the environment variables."
         )
-        return # Exit the function if the bot token is not set
+        return # Exit the function if the bot token is not set 
 
     key = base64.b64decode(key_str)
     # Use await bot.start(bot_token) instead of bot.run(bot_token)
