@@ -826,7 +826,7 @@ async def read_logs_slash(interaction: discord.Interaction, hide_message: bool =
     description="Delete the content of all the message logs",
 )
 @is_owner()
-async def delete_all_logs_slash(interaction: discord.Interaction, hide_message: bool = False):
+async def delete_all_logs_slash(interaction: discord.Interaction, hide_message: bool = True):
     with open("data/message_logs.ndjson", "w") as f:
         f.write("")
 
