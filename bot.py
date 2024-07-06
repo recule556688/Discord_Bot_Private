@@ -4,6 +4,7 @@ import discord
 import os
 import asyncio
 import requests
+import aiohttp
 import logging
 from discord import app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
@@ -15,7 +16,7 @@ import base64
 from clean_log_file import clean_log_file
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", filename="data/bot.log")
 
 
 # Function to encrypt JSON data
@@ -367,7 +368,7 @@ async def weather_slash(
         base_url,
         params={
             "q": city,
-            "appid": api_key,
+            "appid": api_weather,
             "units": "metric",
         },
     )
@@ -698,6 +699,137 @@ async def read_logs_slash(interaction: discord.Interaction, hide_message: bool =
     else:
         await interaction.response.send_message("No valid logs found.", ephemeral=hide_message)
 
+@bot.tree.command(
+    name="delete_all_logs",
+    description="Delete the content of all the message logs",
+)
+@is_owner()
+async def delete_all_logs_slash(interaction: discord.Interaction, hide_message: bool = False):
+    with open("data/message_logs.ndjson", "w") as f:
+        f.write("")
+
+    await interaction.response.send_message("All logs have been deleted.", ephemeral=hide_message)
+
+
+async def crafty_action_autocompletion(
+    interaction: discord.Interaction, current: str
+) -> typing.List[app_commands.Choice[str]]:
+    valid_actions = [
+        "start_server",
+        "stop_server",
+        "restart_server",
+        "backup_server",
+    ]
+    data = []
+
+    for action in valid_actions:
+        if current.lower() in action.lower():
+            data.append(app_commands.Choice(name=action, value=action))
+
+    return data
+
+
+# Global variables
+servers = []
+
+
+@tasks.loop(seconds=10)  # Adjust the interval as needed
+async def update_servers():
+    global servers
+    url = "https://crafty.tessdev.fr/api/v2/servers"
+    headers = {"Authorization": f"Bearer {crafty_api_token}"}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            data = await response.json()
+            if response.status == 200:
+                servers = [
+                    {"uuid": server["server_id"], "name": server["server_name"]}
+                    for server in data.get("data", [])
+                ]
+                # Check if the log file exists
+                if not os.path.exists("log_once_per_session.txt"):
+                    logging.info("Successfully fetched server data.")
+                    # Create the file to mark the message as logged
+                    with open("log_once_per_session.txt", "w") as f:
+                        f.write("Logged")
+            else:
+                logging.error("Failed to fetch server data.")
+                logging.error("Attempting to re-authenticate...")
+                await authenticate()
+
+
+@update_servers.before_loop
+async def before_update_servers():
+    await bot.wait_until_ready()
+
+
+async def server_uuid_autocompletion(
+    interaction: discord.Interaction, current: str
+) -> typing.List[app_commands.Choice[str]]:
+    # Filter server UUIDs and names based on the current input
+    filtered_servers = [
+        server
+        for server in servers
+        if current.lower() in server["uuid"].lower()
+        or current.lower() in server["name"].lower()
+    ]
+    return [
+        app_commands.Choice(
+            name=f"{server['name']} ({server['uuid']})", value=server["uuid"]
+        )
+        for server in filtered_servers[:25]
+    ]  # Limit to 25 choices
+
+
+@bot.tree.command(
+    name="crafty_control",
+    description="Perform an action on a server",
+)
+@app_commands.autocomplete(action=crafty_action_autocompletion)
+@app_commands.autocomplete(server_uuid=server_uuid_autocompletion)
+async def server_action_slash(
+    interaction: discord.Interaction,
+    server_uuid: str,
+    action: str,
+    hide_message: bool = True,
+):
+    # Validate the action
+    valid_actions = [
+        "start_server",
+        "stop_server",
+        "restart_server",
+        "backup_server",
+    ]
+    if action not in valid_actions:
+        await interaction.response.send_message(
+            f"Invalid action. Please choose from {', '.join(valid_actions)}.",
+            ephemeral=True,
+        )
+        return
+
+    # Construct the API request
+    url = f"https://crafty.tessdev.fr/api/v2/servers/{server_uuid}/action/{action}"
+    headers = {
+        "Authorization": f"Bearer {crafty_api_token}",
+        "Accept": "application/json",
+    }
+
+    # Send the request
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers) as response:
+            data = await response.json()
+            if response.status == 200 and data.get("status") == "ok":
+                message = "Action performed successfully."
+                if "new_server_id" in data.get("data", {}):
+                    message += f" New server ID: {data['data']['new_server_id']}"
+                await interaction.response.send_message(message, ephemeral=hide_message)
+            else:
+                await interaction.response.send_message(
+                    "Failed to perform the action on the server.",
+                    ephemeral=hide_message,
+                )
+
 
 @bot.event
 async def on_ready():
@@ -715,8 +847,9 @@ async def on_ready():
     logging.info(f"Logged in as {bot.user.name} - {bot.user.id}")
     logging.info(f"{bot.user.name}_BOT is ready to go !")
     check_time.start()
+    update_servers.start()
     global start_time
-    start_time = datetime.utcnow()
+    start_time = datetime.now()
     logging.info(f"Bot started at {start_time}")
 
     try:
@@ -735,14 +868,78 @@ async def on_ready():
         logging.info("No birthdays json file found. Starting with an empty dictionary.")
 
 
-# Use the bot token from .env file
-bot_token = os.getenv("BOT_TOKEN")
-api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-key_str = os.getenv("ENCRYPTION_KEY")
-key = base64.b64decode(key_str)
-if bot_token is None or api_key is None or key_str is None:
-    logging.error(
-        "Bot token or api_key or ENCRYPTION_KEY is not set in the environment variables."
-    )
-else:
-    bot.run(bot_token)
+async def authenticate():
+    global crafty_api_token
+    crafty_login = os.getenv("CRAFTY_LOGIN")
+    crafty_password = os.getenv("CRAFTY_PASSWORD")
+    if not crafty_login or not crafty_password:
+        logging.error(
+            "CRAFTY_LOGIN or CRAFTY_PASSWORD environment variables are not set."
+        )
+        return
+    url = "https://crafty.tessdev.fr/api/v2/auth/login"
+    payload = {
+        "username": crafty_login,
+        "password": crafty_password,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as response:
+            data = await response.json()
+            logging.info(f"Authentication response status: {response.status}")
+            if response.status == 200:
+                crafty_api_token = data["data"]["token"]
+                logging.info("Successfully authenticated, new token obtained")
+                update_env_file(crafty_api_token)
+            else:
+                logging.error("Failed to authenticate")
+                logging.error(data)
+
+
+def update_env_file(new_token):
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    with open(env_path, "r") as file:
+        lines = file.readlines()
+
+    with open(env_path, "w") as file:
+        for line in lines:
+            if line.startswith("CRAFTY_API_TOKEN"):
+                file.write(f'CRAFTY_API_TOKEN="{new_token}"\n')
+            else:
+                file.write(line)
+
+async def ensure_authenticated():
+    global crafty_api_token
+    if not crafty_api_token:
+        await authenticate()
+
+
+async def main():
+    global crafty_api_token
+    global key
+    global api_weather
+
+    crafty_api_token = os.getenv("CRAFTY_API_TOKEN")
+    if crafty_api_token is None:
+        logging.error("Crafty API token is not set in the environment variables.")
+        logging.info("Attempting to authenticate...")
+        await authenticate()  # Correctly using await here
+
+    bot_token = os.getenv("BOT_TOKEN")
+    api_weather = os.getenv("OPENWEATHERMAP_API_KEY")
+    key_str = os.getenv("ENCRYPTION_KEY")
+    if bot_token is None or api_weather is None or key_str is None:
+        logging.error(
+            "Bot token, api_weather, or ENCRYPTION_KEY is not set in the environment variables."
+        )
+        return  # Exit if the necessary environment variables are not set
+
+    key = base64.b64decode(key_str)
+    # Use await bot.start(bot_token) instead of bot.run(bot_token)
+    await bot.start(bot_token)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+    if os.path.exists("log_once_per_session.txt"):
+        os.remove("log_once_per_session.txt")
