@@ -570,17 +570,28 @@ async def birthday_slash(
             await interaction.response.send_message(embeds=[embed])
 
 
+def load_excluded_channels():
+    try:
+        with open("data/logging_channels.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logging.error("logging_channels.json file not found.")
+        return []
+
+
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
+    excluded_channels = load_excluded_channels()
+    if message.author == bot.user or message.channel.id in excluded_channels:
         return
 
     message_data = {
         "user": message.author.name,
         "message": message.content,
         "time": message.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "attachments": [attachment.url for attachment in message.attachments],
+        "attachments": [attachment.url for attachment in message.attachments] if message.attachments else "No attachments",
         "guild": message.guild.name if message.guild else "Direct Message",
+        "channel": message.channel.name if message.guild else "Direct Message",
     }
 
     encrypted_data = encrypt_json(message_data, key)
@@ -593,7 +604,8 @@ async def on_message(message):
 
 @bot.event
 async def on_message_edit(before, after):
-    if before.author == bot.user:
+    excluded_channels = load_excluded_channels()
+    if before.author == bot.user or before.channel.id in excluded_channels:
         return
 
     edit_data = {
@@ -606,12 +618,122 @@ async def on_message_edit(before, after):
             else before.created_at.strftime("%Y-%m-%d %H:%M:%S")
         ),
         "guild": before.guild.name if before.guild else "Direct Message",
+        "channel": before.channel.name if before.guild else "Direct Message",
     }
 
     encrypted_data = encrypt_json(edit_data, key)
 
     with open("data/message_logs.ndjson", "a") as f:
         f.write(json.dumps(encrypted_data) + "\n")
+
+
+async def action_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    choices = ["add", "remove", "list"]
+    return [
+        app_commands.Choice(name=choice, value=choice)
+        for choice in choices
+        if current.lower() in choice.lower()
+    ]
+
+
+@bot.tree.command(
+    name="manage_logging_channels",
+    description="Manage the logging channels to not log messages from",
+)
+@app_commands.describe(
+    channel="Add, remove or list the channels to exclude from logging messages"
+)
+@app_commands.autocomplete(action=action_autocomplete)
+async def manage_logging_channels_slash(
+    interaction: discord.Interaction,
+    action: str,
+    channel: discord.TextChannel = None,
+    hide_message: bool = True,
+):
+    json_file_path = "data/logging_channels.json"
+    channels = []
+
+    try:
+        with open(json_file_path, "r") as f:
+            file_content = f.read().strip()
+            if not file_content:
+                channels = []
+            else:
+                channels = json.loads(file_content)
+                if not isinstance(channels, list):  # Ensure channels is a list
+                    logging.error(
+                        f"Expected a list in {json_file_path}, but got a different type."
+                    )
+                    channels = []  # Fallback to an empty list or handle appropriately
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON decode error in {json_file_path}: {e}")
+        channels = []
+    except FileNotFoundError:
+        logging.error(f"File not found: {json_file_path}")
+        channels = []
+
+    if action == "add":
+        if channel is None:
+            await interaction.response.send_message(
+                "Please specify a channel to add.", ephemeral=True
+            )
+            return
+
+        # Add the channel ID to the list if it's not already there
+        if channel.id not in channels:
+            channels.append(channel.id)
+            with open(json_file_path, "w") as f:
+                json.dump(channels, f)
+
+            await interaction.response.send_message(
+                f"Added channel {channel.mention} to the list of channels to exclude from logging.",
+                ephemeral=hide_message,
+            )
+        else:
+            await interaction.response.send_message(
+                f"Channel {channel.mention} is already in the list of channels to exclude from logging.",
+                ephemeral=hide_message,
+            )
+
+    elif action == "remove":
+        if channel is None:
+            await interaction.response.send_message(
+                "Please specify a channel to remove.", ephemeral=True
+            )
+            return
+
+        # Remove the channel ID from the list if it exists
+        if channel.id in channels:
+            channels.remove(channel.id)
+            with open(json_file_path, "w") as f:
+                json.dump(channels, f)
+
+            await interaction.response.send_message(
+                f"Removed channel {channel.mention} from the list of channels to exclude from logging.",
+                ephemeral=hide_message,
+            )
+        else:
+            await interaction.response.send_message(
+                f"Channel {channel.mention} is not in the list of channels to exclude from logging.",
+                ephemeral=hide_message,
+            )
+
+    elif action == "list":
+        if channels:
+            channel_mentions = [
+                interaction.guild.get_channel(c).mention for c in channels if interaction.guild.get_channel(c)
+            ]
+            channels_list = "\n".join(channel_mentions)
+            await interaction.response.send_message(
+                f"Channels to exclude from logging:\n{channels_list}", ephemeral=hide_message
+            )
+        else:
+            await interaction.response.send_message(
+                "No channels are excluded from logging.", ephemeral=hide_message
+            )
 
 
 class LogEmbed(ui.View):
