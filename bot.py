@@ -33,6 +33,35 @@ def get_db_connection():
     return conn
 
 
+def initialize_database():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Create logging_channels table if it doesn't exist
+    cur.execute(
+        """
+    CREATE TABLE IF NOT EXISTS logging_channels (
+        id SERIAL PRIMARY KEY,
+        channel_id BIGINT NOT NULL UNIQUE
+    );
+    """
+    )
+
+    # Create message_logs table if it doesn't exist
+    cur.execute(
+        """
+    CREATE TABLE IF NOT EXISTS message_logs (
+        id SERIAL PRIMARY KEY,
+        encoded_message TEXT NOT NULL
+    );
+    """
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 CITY = [
     "New York",
     "Los Angeles",
@@ -1146,6 +1175,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    initialize_database()
     asyncio.run(main())
     if os.path.exists("log_once_per_session.txt"):
         os.remove("log_once_per_session.txt")
