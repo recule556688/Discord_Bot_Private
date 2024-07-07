@@ -26,7 +26,9 @@ RUN adduser \
 # Download dependencies as a separate step to take advantage of Docker's caching.
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install -r requirements.txt
+    apt-get update && apt-get install -y gcc libpq-dev && \
+    python -m pip install -r requirements.txt && \
+    python -m pip install psycopg2-binary
 
 # Copy the source code into the container.
 COPY . .
@@ -37,5 +39,5 @@ RUN mkdir -p /app/data && chmod -R 777 /app/data && touch /app/data/message_logs
 # Switch to the non-privileged user to run the application.
 USER appuser
 
-# Run the application.
-CMD ["python", "bot.py"]
+# Run the migration script and then the bot
+CMD ["sh", "-c", "python bot.py"]

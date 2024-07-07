@@ -2,11 +2,29 @@ version: '3.8'
 
 services:
   bot:
-    image: getkarma/discord-bot-private:latest
+    build: .
     env_file:
       - .env
+    environment:
+      POSTGRES_DB: discord_bot
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
     volumes:
       - ./data:/app/data
     user: "10001:10001"
     restart: unless-stopped
     container_name: karma-private-bot
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: discord_bot
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
