@@ -163,3 +163,4 @@ cython_debug/
 #.idea/
 .DS_Store
 log_once_per_session.txt
+data/bot.log
