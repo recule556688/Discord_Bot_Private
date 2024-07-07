@@ -17,7 +17,10 @@ import psycopg2
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    filename="data/bot.log",
+    handlers=[
+        logging.FileHandler("data/bot.log"),  # Log to file
+        logging.StreamHandler(),  # Log to console
+    ],
 )
 
 
