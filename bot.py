@@ -11,30 +11,26 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from dateutil.parser import parse
-from Crypto.Cipher import AES
-import base64
-from clean_log_file import clean_log_file
+import psycopg2
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", filename="data/bot.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filename="data/bot.log",
+)
 
 
-# Function to encrypt JSON data
-def encrypt_json(data, key):
-    cipher = AES.new(key, AES.MODE_EAX)
-    ciphertext, tag = cipher.encrypt_and_digest(json.dumps(data).encode())
-    json_val = [
-        base64.b64encode(x).decode("utf-8") for x in (cipher.nonce, ciphertext, tag)
-    ]
-    return json_val
-
-
-# Function to decrypt JSON data
-def decrypt_json(json_val, key):
-    nonce, ciphertext, tag = [base64.b64decode(x.encode("utf-8")) for x in json_val]
-    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
-    data = cipher.decrypt_and_verify(ciphertext, tag)
-    return json.loads(data)
+# Database connection function
+def get_db_connection():
+    conn = psycopg2.connect(
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host="db",
+        port=5432,
+    )
+    return conn
 
 
 CITY = [
@@ -65,8 +61,6 @@ CITY = [
     "Villeurbanne",
 ]
 
-# Create a dictionary to store birthdays
-birthdays = {}
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
 # Join with the relative path
@@ -83,6 +77,7 @@ tree = app_commands.CommandTree(client)
 
 ADDITIONAL_ALLOWED_USER_ID = 766746672964567052  # Replace with the actual user ID
 
+
 def is_owner():
     def predicate(interaction: discord.Interaction):
         # Check if the user is the server owner
@@ -93,6 +88,7 @@ def is_owner():
         return is_server_owner or is_additional_user
 
     return app_commands.check(predicate)
+
 
 @bot.tree.command(
     name="ping",
@@ -451,9 +447,36 @@ async def action_autocompletion(
     return data
 
 
-def load_birthdays():
-    with open(file_path, "r") as f:
-        return json.load(f)
+def load_birthdays_from_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT username, birthdate FROM birthdays")
+    rows = cur.fetchall()
+    birthdays = {row[0]: row[1].strftime("%d/%m/%Y") for row in rows}
+    cur.close()
+    conn.close()
+    return birthdays
+
+
+def save_birthday_to_db(name, birthdate):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO birthdays (username, birthdate) VALUES (%s, %s) ON CONFLICT (username) DO UPDATE SET birthdate = EXCLUDED.birthdate",
+        (name, birthdate),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_birthday_from_db(name):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM birthdays WHERE username = %s", (name,))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 @bot.tree.command(name="birthday", description="Set your birthday")
@@ -468,11 +491,8 @@ async def birthday_slash(
     global birthdays
     if action == "add":
         if name and birthdate:
-            birthdate = parse(birthdate).strftime("%d/%m/%Y")
-            birthdays = load_birthdays()
-            birthdays[name] = birthdate
-            with open(file_path, "w") as f:
-                json.dump(birthdays, f)
+            birthdate = parse(birthdate).strftime("%Y-%m-%d")
+            save_birthday_to_db(name, birthdate)
             embed = Embed(
                 title="Birthday Added",
                 description=f"Added birthday for {name} on {birthdate}",
@@ -487,10 +507,8 @@ async def birthday_slash(
             )
             await interaction.response.send_message(embeds=[embed])
     elif action == "delete":
-        if name in birthdays:
-            del birthdays[name]
-            with open(file_path, "w") as f:
-                json.dump(birthdays, f)
+        if name:
+            delete_birthday_from_db(name)
             embed = Embed(
                 title="Birthday Deleted",
                 description=f"Deleted birthday for {name}",
@@ -505,7 +523,7 @@ async def birthday_slash(
             )
             await interaction.response.send_message(embeds=[embed])
     elif action == "display":
-        birthdays = load_birthdays()
+        birthdays = load_birthdays_from_db()
         if name:
             if name in birthdays:
                 embed = Embed(
@@ -540,9 +558,9 @@ async def birthday_slash(
         await interaction.response.send_message(embeds=[embed])
     elif action == "next":
         if name:
-            birthdays = load_birthdays()
+            birthdays = load_birthdays_from_db()
             if name in birthdays:
-                birthdate = datetime.strptime(birthdays[name], "%d/%m/%Y")
+                birthdate = datetime.strptime(birthdays[name], "%Y-%m-%d")
                 now = datetime.now()
                 next_birthday = birthdate.replace(year=now.year)
                 if now > next_birthday:
@@ -579,6 +597,30 @@ def load_excluded_channels():
         return []
 
 
+def log_message_to_db(message_data):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO message_logs (encoded_message) VALUES (%s)",
+        (json.dumps(message_data),),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def log_message_to_db(message_data):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO message_logs (encoded_message) VALUES (%s)",
+        (json.dumps(message_data),),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 @bot.event
 async def on_message(message):
     excluded_channels = load_excluded_channels()
@@ -589,16 +631,16 @@ async def on_message(message):
         "user": message.author.name,
         "message": message.content,
         "time": message.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "attachments": [attachment.url for attachment in message.attachments] if message.attachments else "No attachments",
+        "attachments": (
+            [attachment.url for attachment in message.attachments]
+            if message.attachments
+            else "No attachments"
+        ),
         "guild": message.guild.name if message.guild else "Direct Message",
         "channel": message.channel.name if message.guild else "Direct Message",
     }
 
-    encrypted_data = encrypt_json(message_data, key)
-
-    with open("data/message_logs.ndjson", "a") as f:
-        f.write(json.dumps(encrypted_data) + "\n")
-
+    log_message_to_db(message_data)
     await bot.process_commands(message)
 
 
@@ -621,16 +663,14 @@ async def on_message_edit(before, after):
         "channel": before.channel.name if before.guild else "Direct Message",
     }
 
-    encrypted_data = encrypt_json(edit_data, key)
-
-    with open("data/message_logs.ndjson", "a") as f:
-        f.write(json.dumps(encrypted_data) + "\n")
+    log_message_to_db(edit_data)
+    await bot.process_commands(after)
 
 
 async def action_autocomplete(
     interaction: discord.Interaction,
     current: str,
-) -> list[app_commands.Choice[str]]:
+) -> typing.List[app_commands.Choice[str]]:
     choices = ["add", "remove", "list"]
     return [
         app_commands.Choice(name=choice, value=choice)
@@ -639,41 +679,47 @@ async def action_autocomplete(
     ]
 
 
+async def channel_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> typing.List[app_commands.Choice[str]]:
+    action = interaction.namespace.action
+    excluded_channels = load_excluded_channels()
+    if action == "remove":
+        return [
+            app_commands.Choice(
+                name=interaction.guild.get_channel(c).name, value=str(c)
+            )
+            for c in excluded_channels
+            if interaction.guild.get_channel(c)
+            and current.lower() in interaction.guild.get_channel(c).name.lower()
+        ]
+    else:  # Show all channels for the "add" action, excluding already excluded channels
+        return [
+            app_commands.Choice(name=channel.name, value=str(channel.id))
+            for channel in interaction.guild.text_channels
+            if channel.id not in excluded_channels
+            and current.lower() in channel.name.lower()
+        ]
+
+
 @bot.tree.command(
     name="manage_logging_channels",
     description="Manage the logging channels to not log messages from",
 )
 @app_commands.describe(
-    channel="Add, remove or list the channels to exclude from logging messages"
+    action="Add, remove or list the channels to exclude from logging messages",
+    channel="Specify the channel to add or remove",
 )
 @app_commands.autocomplete(action=action_autocomplete)
+@app_commands.autocomplete(channel=channel_autocomplete)
 async def manage_logging_channels_slash(
     interaction: discord.Interaction,
     action: str,
-    channel: discord.TextChannel = None,
+    channel: str = None,
     hide_message: bool = True,
 ):
-    json_file_path = "data/logging_channels.json"
-    channels = []
-
-    try:
-        with open(json_file_path, "r") as f:
-            file_content = f.read().strip()
-            if not file_content:
-                channels = []
-            else:
-                channels = json.loads(file_content)
-                if not isinstance(channels, list):  # Ensure channels is a list
-                    logging.error(
-                        f"Expected a list in {json_file_path}, but got a different type."
-                    )
-                    channels = []  # Fallback to an empty list or handle appropriately
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON decode error in {json_file_path}: {e}")
-        channels = []
-    except FileNotFoundError:
-        logging.error(f"File not found: {json_file_path}")
-        channels = []
+    channels = load_excluded_channels()
 
     if action == "add":
         if channel is None:
@@ -682,11 +728,17 @@ async def manage_logging_channels_slash(
             )
             return
 
-        # Add the channel ID to the list if it's not already there
+        channel = interaction.guild.get_channel(int(channel))
         if channel.id not in channels:
-            channels.append(channel.id)
-            with open(json_file_path, "w") as f:
-                json.dump(channels, f)
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO logging_channels (channel_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                (channel.id,),
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
 
             await interaction.response.send_message(
                 f"Added channel {channel.mention} to the list of channels to exclude from logging.",
@@ -705,11 +757,16 @@ async def manage_logging_channels_slash(
             )
             return
 
-        # Remove the channel ID from the list if it exists
+        channel = interaction.guild.get_channel(int(channel))
         if channel.id in channels:
-            channels.remove(channel.id)
-            with open(json_file_path, "w") as f:
-                json.dump(channels, f)
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM logging_channels WHERE channel_id = %s", (channel.id,)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
 
             await interaction.response.send_message(
                 f"Removed channel {channel.mention} from the list of channels to exclude from logging.",
@@ -724,11 +781,14 @@ async def manage_logging_channels_slash(
     elif action == "list":
         if channels:
             channel_mentions = [
-                interaction.guild.get_channel(c).mention for c in channels if interaction.guild.get_channel(c)
+                interaction.guild.get_channel(c).mention
+                for c in channels
+                if interaction.guild.get_channel(c)
             ]
             channels_list = "\n".join(channel_mentions)
             await interaction.response.send_message(
-                f"Channels to exclude from logging:\n{channels_list}", ephemeral=hide_message
+                f"Channels to exclude from logging:\n{channels_list}",
+                ephemeral=hide_message,
             )
         else:
             await interaction.response.send_message(
@@ -736,11 +796,41 @@ async def manage_logging_channels_slash(
             )
 
 
+def load_excluded_channels():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT channel_id FROM logging_channels")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [row[0] for row in rows]
+
+
 class LogEmbed(ui.View):
     def __init__(self, logs):
         super().__init__()
         self.logs = logs
         self.current_page = 0
+        self.page_select = ui.Select(
+            placeholder="Select a page...",
+            options=[
+                discord.SelectOption(label=f"Page {i + 1}", value=str(i))
+                for i in range(len(logs))
+            ],
+        )
+        self.page_select.callback = self.page_select_callback
+        self.add_item(self.page_select)
+
+    async def page_select_callback(self, interaction: discord.Interaction):
+        try:
+            selected_page = int(self.page_select.values[0])
+            self.current_page = selected_page
+            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        except Exception as e:
+            logging.error(f"Error in page_select_callback: {e}")
+            await interaction.response.send_message(
+                "An error occurred.", ephemeral=True
+            )
 
     @ui.button(label="Previous", style=ButtonStyle.primary)
     async def previous_button(
@@ -749,6 +839,7 @@ class LogEmbed(ui.View):
         try:
             if self.current_page > 0:
                 self.current_page -= 1
+                self.page_select.placeholder = f"Page {self.current_page + 1}"
                 await interaction.response.edit_message(
                     embed=self.get_embed(), view=self
                 )
@@ -767,6 +858,7 @@ class LogEmbed(ui.View):
         try:
             if self.current_page < len(self.logs) - 1:
                 self.current_page += 1
+                self.page_select.placeholder = f"Page {self.current_page + 1}"
                 await interaction.response.edit_message(
                     embed=self.get_embed(), view=self
                 )
@@ -801,36 +893,44 @@ class LogEmbed(ui.View):
     description="Read the content of the message logs",
 )
 @is_owner()
-async def read_logs_slash(interaction: discord.Interaction, hide_message: bool = False):
-    with open("data/message_logs.ndjson", "r") as f:
-        logs = f.readlines()
+async def read_logs_slash(interaction: discord.Interaction, hide_message: bool = True):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT encoded_message FROM message_logs")
+    rows = cur.fetchall()
+    logs = [json.loads(row[0]) for row in rows]
+    cur.close()
+    conn.close()
 
-    decrypted_logs = []
-    for log in logs:
-        try:
-            decrypted_log = decrypt_json(json.loads(log), key)
-            decrypted_logs.append(decrypted_log)
-        except json.JSONDecodeError as e:
-            logging.error(f"Error decoding JSON: {e} - Log: {log}")
-        except ValueError as e:
-            logging.error(f"Error decrypting log: {e} - Log: {log}")
-
-    if decrypted_logs:
-        view = LogEmbed(decrypted_logs)
-        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=hide_message)
+    if logs:
+        view = LogEmbed(logs)
+        await interaction.response.send_message(
+            embed=view.get_embed(), view=view, ephemeral=hide_message
+        )
     else:
-        await interaction.response.send_message("No valid logs found.", ephemeral=hide_message)
+        await interaction.response.send_message(
+            "No valid logs found.", ephemeral=hide_message
+        )
+
 
 @bot.tree.command(
     name="delete_all_logs",
     description="Delete the content of all the message logs",
 )
 @is_owner()
-async def delete_all_logs_slash(interaction: discord.Interaction, hide_message: bool = True):
-    with open("data/message_logs.ndjson", "w") as f:
-        f.write("")
+async def delete_all_logs_slash(
+    interaction: discord.Interaction, hide_message: bool = True
+):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM message_logs")
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    await interaction.response.send_message("All logs have been deleted.", ephemeral=hide_message)
+    await interaction.response.send_message(
+        "All logs have been deleted.", ephemeral=hide_message
+    )
 
 
 async def crafty_action_autocompletion(
@@ -961,11 +1061,6 @@ async def on_ready():
         ),
         status=discord.Status.dnd,
     )
-    try:
-        clean_log_file()
-        logging.info("Successfully cleaned the log file.")
-    except Exception as e:
-        logging.error(f"Failed to clean the log file: {e}")
     logging.info(f"Logged in as {bot.user.name} - {bot.user.id}")
     logging.info(f"{bot.user.name}_BOT is ready to go !")
     check_time.start()
@@ -979,15 +1074,6 @@ async def on_ready():
         logging.info(f"Synced {len(synced)} commands")
     except Exception as e:
         logging.error(f"Failed to sync commands: {e}")
-
-    try:
-        with open(file_path, "r") as f:
-            birthdays = json.load(f)
-            logging.info("Loaded birthdays from file.")
-    except FileNotFoundError:
-        with open(file_path, "w") as f:
-            json.dump({}, f)
-        logging.info("No birthdays json file found. Starting with an empty dictionary.")
 
 
 async def authenticate():
@@ -1030,6 +1116,7 @@ def update_env_file(new_token):
             else:
                 file.write(line)
 
+
 async def ensure_authenticated():
     global crafty_api_token
     if not crafty_api_token:
@@ -1038,7 +1125,6 @@ async def ensure_authenticated():
 
 async def main():
     global crafty_api_token
-    global key
     global api_weather
 
     crafty_api_token = os.getenv("CRAFTY_API_TOKEN")
@@ -1049,14 +1135,12 @@ async def main():
 
     bot_token = os.getenv("BOT_TOKEN")
     api_weather = os.getenv("OPENWEATHERMAP_API_KEY")
-    key_str = os.getenv("ENCRYPTION_KEY")
-    if bot_token is None or api_weather is None or key_str is None:
+    if bot_token is None or api_weather is None:
         logging.error(
-            "Bot token, api_weather, or ENCRYPTION_KEY is not set in the environment variables."
+            "Bot token or api_weather is not set in the environment variables."
         )
-        return # Exit the function if the bot token is not set
+        return  # Exit the function if the bot token is not set
 
-    key = base64.b64decode(key_str)
     # Use await bot.start(bot_token) instead of bot.run(bot_token)
     await bot.start(bot_token)
 
