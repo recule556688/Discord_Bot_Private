@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   bot:
-    build: .
+    image: getkarma/discord-bot-private:latest
     env_file:
       - .env
     environment:
@@ -14,17 +14,31 @@ services:
     user: "10001:10001"
     restart: unless-stopped
     container_name: karma-private-bot
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     depends_on:
       - db
+    networks:
+      - discord_bot_network
 
   db:
     image: postgres:13
-    environment:
-      POSTGRES_DB: discord_bot
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+    container_name: db_bot
+    env_file:
+      - .env  # Load environment variables from stack.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - discord_bot_network
+      - nginx-proxy-manager_default
 
 volumes:
   postgres_data:
+
+networks:
+  nginx-proxy-manager_default:
+    external: true
+  discord_bot_network:
+    driver: bridge
