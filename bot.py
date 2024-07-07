@@ -93,11 +93,6 @@ CITY = [
     "Villeurbanne",
 ]
 
-# Get the directory of the current script
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Join with the relative path
-file_path = os.path.join(script_dir, "data", "birthdays.json")
-
 # Load .env file
 load_dotenv()
 intents = discord.Intents.all()
@@ -106,6 +101,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+# Create a global variable to store the user, message, and time
+scheduled_message = {"user": None, "message": "", "time": ""}
 
 ADDITIONAL_ALLOWED_USER_ID = 766746672964567052  # Replace with the actual user ID
 
@@ -143,8 +140,6 @@ async def owner_slash(interaction: discord.Interaction):
     )
 
 
-# Create a global variable to store the user, message, and time
-scheduled_message = {"user": None, "message": "", "time": ""}
 
 
 @tasks.loop(seconds=10)  # Check every 10 seconds
@@ -618,15 +613,6 @@ async def birthday_slash(
                 color=0xFF0000,
             )
             await interaction.response.send_message(embeds=[embed])
-
-
-def load_excluded_channels():
-    try:
-        with open("data/logging_channels.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logging.error("logging_channels.json file not found.")
-        return []
 
 
 def log_message_to_db(message_data):
