@@ -140,8 +140,6 @@ async def owner_slash(interaction: discord.Interaction):
     )
 
 
-
-
 @tasks.loop(seconds=10)  # Check every 10 seconds
 async def check_time():
     global scheduled_message
