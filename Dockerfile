@@ -33,9 +33,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the source code into the container.
 COPY . .
 
-# Ensure the data directory exists and has the right permissions
-RUN mkdir -p /app/data && chmod -R 777 /app/data && touch /app/data/message_logs.ndjson && chmod 666 /app/data/message_logs.ndjson
-
 # Switch to the non-privileged user to run the application.
 USER appuser
 
