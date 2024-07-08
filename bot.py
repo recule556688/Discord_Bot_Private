@@ -515,6 +515,9 @@ def delete_birthday_from_db(name):
     conn.close()
 
 
+from discord import Colour, Embed
+
+
 @bot.tree.command(name="birthday", description="Set your birthday")
 @app_commands.describe(
     action="Add, delete, display, or get the number of days before the next birthday"
@@ -532,32 +535,34 @@ async def birthday_slash(
             birthdate = parse(birthdate).strftime("%Y-%m-%d")
             save_birthday_to_db(name, birthdate)
             embed = Embed(
-                title="Birthday Added",
-                description=f"Added birthday for {name} on {birthdate}",
-                color=0x00FF00,
+                title="🎉 Birthday Added",
+                description=f"Added birthday for **{name}** on {birthdate}",
+                color=Colour.green(),
             )
+            embed.set_footer(text="Birthday Bot")
             await interaction.response.send_message(embeds=[embed])
         else:
             embed = Embed(
-                title="Error",
+                title="❌ Error",
                 description="You must provide a name and birthdate to add a birthday.",
-                color=0xFF0000,
+                color=Colour.red(),
             )
             await interaction.response.send_message(embeds=[embed])
     elif action == "delete":
         if name:
             delete_birthday_from_db(name)
             embed = Embed(
-                title="Birthday Deleted",
-                description=f"Deleted birthday for {name}",
-                color=0x00FF00,
+                title="🗑️ Birthday Deleted",
+                description=f"Deleted birthday for **{name}**",
+                color=Colour.green(),
             )
+            embed.set_footer(text="Birthday Bot")
             await interaction.response.send_message(embeds=[embed])
         else:
             embed = Embed(
-                title="Error",
+                title="❌ Error",
                 description="You must provide a valid name to delete a birthday.",
-                color=0xFF0000,
+                color=Colour.red(),
             )
             await interaction.response.send_message(embeds=[embed])
     elif action == "display":
@@ -565,34 +570,34 @@ async def birthday_slash(
         if name:
             if name in birthdays:
                 embed = Embed(
-                    title=f"Birthday for {name}",
-                    description=f"{name}: {birthdays[name]}",
-                    color=0x00FF00,
+                    title=f"🎂 Birthday for {name}",
+                    description=f"**{name}**: {birthdays[name]}",
+                    color=Colour.blue(),
                 )
+                embed.set_footer(text="Birthday Bot")
             else:
                 embed = Embed(
-                    title="No Birthday Found",
-                    description=f"No birthday found for {name}.",
-                    color=0xFF0000,
+                    title="❌ No Birthday Found",
+                    description=f"No birthday found for **{name}**.",
+                    color=Colour.red(),
                 )
+                embed.set_footer(text="Birthday Bot")
         else:
             if birthdays:
                 embed = Embed(
-                    title="Birthdays",
-                    description="\n".join(
-                        [
-                            f"{name}: {birthdate}"
-                            for name, birthdate in birthdays.items()
-                        ]
-                    ),
-                    color=0x00FF00,
+                    title="📅 Birthdays",
+                    color=Colour.blue(),
                 )
+                embed.set_footer(text="Birthday Bot")
+                for name, birthdate in birthdays.items():
+                    embed.add_field(name=name, value=birthdate, inline=False)
             else:
                 embed = Embed(
-                    title="No Birthdays",
+                    title="❌ No Birthdays",
                     description="No birthdays to display.",
-                    color=0xFF0000,
+                    color=Colour.red(),
                 )
+                embed.set_footer(text="Birthday Bot")
         await interaction.response.send_message(embeds=[embed])
     elif action == "next":
         if name:
@@ -605,24 +610,27 @@ async def birthday_slash(
                     next_birthday = next_birthday.replace(year=now.year + 1)
                 days_left = (next_birthday - now).days
                 embed = Embed(
-                    title=f"Next Birthday for {name}",
-                    description=f"{days_left} days until {name}'s next birthday.",
-                    color=0x00FF00,
+                    title=f"🎉 Next Birthday for {name}",
+                    description=f"{days_left} days until **{name}'s** next birthday.",
+                    color=Colour.blue(),
                 )
+                embed.set_footer(text="Birthday Bot")
                 await interaction.response.send_message(embeds=[embed])
             else:
                 embed = Embed(
-                    title="No Birthday Found",
-                    description=f"No birthday found for {name}.",
-                    color=0xFF0000,
+                    title="❌ No Birthday Found",
+                    description=f"No birthday found for **{name}**.",
+                    color=Colour.red(),
                 )
+                embed.set_footer(text="Birthday Bot")
                 await interaction.response.send_message(embeds=[embed])
         else:
             embed = Embed(
-                title="No Birthdays",
+                title="❌ No Birthdays",
                 description="No birthdays to display.",
-                color=0xFF0000,
+                color=Colour.red(),
             )
+            embed.set_footer(text="Birthday Bot")
             await interaction.response.send_message(embeds=[embed])
 
 
