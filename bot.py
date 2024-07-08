@@ -529,6 +529,7 @@ async def birthday_slash(
     action: str,
     name: str = None,
     birthdate: str = None,
+    hide_message: bool = True,
 ):
     if action == "add":
         if name and birthdate:
@@ -539,15 +540,15 @@ async def birthday_slash(
                 description=f"Added birthday for **{name}** on {birthdate}",
                 color=Colour.green(),
             )
-            embed.set_footer(text="Birthday Bot")
-            await interaction.response.send_message(embeds=[embed])
+            embed.set_footer(text="Tess Spy Agency")
+            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
         else:
             embed = Embed(
                 title="❌ Error",
                 description="You must provide a name and birthdate to add a birthday.",
                 color=Colour.red(),
             )
-            await interaction.response.send_message(embeds=[embed])
+            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
     elif action == "delete":
         if name:
             delete_birthday_from_db(name)
@@ -556,15 +557,15 @@ async def birthday_slash(
                 description=f"Deleted birthday for **{name}**",
                 color=Colour.green(),
             )
-            embed.set_footer(text="Birthday Bot")
-            await interaction.response.send_message(embeds=[embed])
+            embed.set_footer(text="Tess Spy Agency")
+            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
         else:
             embed = Embed(
                 title="❌ Error",
                 description="You must provide a valid name to delete a birthday.",
                 color=Colour.red(),
             )
-            await interaction.response.send_message(embeds=[embed])
+            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
     elif action == "display":
         birthdays = load_birthdays_from_db()
         if name:
@@ -574,21 +575,21 @@ async def birthday_slash(
                     description=f"**{name}**: {birthdays[name]}",
                     color=Colour.blue(),
                 )
-                embed.set_footer(text="Birthday Bot")
+                embed.set_footer(text="Tess Spy Agency")
             else:
                 embed = Embed(
                     title="❌ No Birthday Found",
                     description=f"No birthday found for **{name}**.",
                     color=Colour.red(),
                 )
-                embed.set_footer(text="Birthday Bot")
+                embed.set_footer(text="Tess Spy Agency")
         else:
             if birthdays:
                 embed = Embed(
                     title="📅 Birthdays",
                     color=Colour.blue(),
                 )
-                embed.set_footer(text="Birthday Bot")
+                embed.set_footer(text="Tess Spy Agency")
                 for name, birthdate in birthdays.items():
                     embed.add_field(name=name, value=birthdate, inline=False)
             else:
@@ -597,8 +598,8 @@ async def birthday_slash(
                     description="No birthdays to display.",
                     color=Colour.red(),
                 )
-                embed.set_footer(text="Birthday Bot")
-        await interaction.response.send_message(embeds=[embed])
+                embed.set_footer(text="Tess Spy Agency")
+        await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
     elif action == "next":
         if name:
             birthdays = load_birthdays_from_db()
@@ -614,24 +615,24 @@ async def birthday_slash(
                     description=f"{days_left} days until **{name}'s** next birthday.",
                     color=Colour.blue(),
                 )
-                embed.set_footer(text="Birthday Bot")
-                await interaction.response.send_message(embeds=[embed])
+                embed.set_footer(text="Tess Spy Agency")
+                await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
             else:
                 embed = Embed(
                     title="❌ No Birthday Found",
                     description=f"No birthday found for **{name}**.",
                     color=Colour.red(),
                 )
-                embed.set_footer(text="Birthday Bot")
-                await interaction.response.send_message(embeds=[embed])
+                embed.set_footer(text="Tess Spy Agency")
+                await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
         else:
             embed = Embed(
                 title="❌ No Birthdays",
                 description="No birthdays to display.",
                 color=Colour.red(),
             )
-            embed.set_footer(text="Birthday Bot")
-            await interaction.response.send_message(embeds=[embed])
+            embed.set_footer(text="Tess Spy Agency")
+            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
 
 
 def log_message_to_db(message_data):
