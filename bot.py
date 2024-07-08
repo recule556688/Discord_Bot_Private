@@ -446,15 +446,18 @@ async def weather_slash(
 async def name_autocompletion(
     interaction: discord.Interaction, current: str
 ) -> typing.List[app_commands.Choice[str]]:
+    action = interaction.namespace.action
     data = []
+    birthdays = load_birthdays_from_db()
 
-    for name in birthdays.keys():
-        if current.lower() in name.lower():
-            data.append(app_commands.Choice(name=name, value=name))
-
-    for member in interaction.guild.members:
-        if current.lower() in member.name.lower():
-            data.append(app_commands.Choice(name=member.name, value=member.name))
+    if action == "add":
+        for member in interaction.guild.members:
+            if current.lower() in member.name.lower() and member.name not in birthdays:
+                data.append(app_commands.Choice(name=member.name, value=member.name))
+    elif action == "delete":
+        for name in birthdays.keys():
+            if current.lower() in name.lower():
+                data.append(app_commands.Choice(name=name, value=name))
 
     return data
 
@@ -477,7 +480,7 @@ def load_birthdays_from_db():
     cur = conn.cursor()
     cur.execute("SELECT username, birthdate FROM birthdays")
     rows = cur.fetchall()
-    birthdays = {row[0]: row[1].strftime("%d/%m/%Y") for row in rows}
+    birthdays = {row[0]: row[1].strftime("%Y-%m-%d") for row in rows}
     cur.close()
     conn.close()
     return birthdays
@@ -513,6 +516,9 @@ def delete_birthday_from_db(name):
 
 
 @bot.tree.command(name="birthday", description="Set your birthday")
+@app_commands.describe(
+    action="Add, delete, display, or get the number of days before the next birthday"
+)
 @app_commands.autocomplete(name=name_autocompletion)
 @app_commands.autocomplete(action=action_autocompletion)
 async def birthday_slash(
@@ -521,7 +527,6 @@ async def birthday_slash(
     name: str = None,
     birthdate: str = None,
 ):
-    global birthdays
     if action == "add":
         if name and birthdate:
             birthdate = parse(birthdate).strftime("%Y-%m-%d")
