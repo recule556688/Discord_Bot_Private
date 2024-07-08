@@ -483,16 +483,24 @@ def load_birthdays_from_db():
     return birthdays
 
 
-def save_birthday_to_db(name, birthdate):
+def save_birthday_to_db(username, birthdate):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO birthdays (username, birthdate) VALUES (%s, %s) ON CONFLICT (username) DO UPDATE SET birthdate = EXCLUDED.birthdate",
-        (name, birthdate),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        cur.execute(
+            """
+            INSERT INTO birthdays (username, birthdate)
+            VALUES (%s, %s)
+            ON CONFLICT (username) DO UPDATE SET birthdate = EXCLUDED.birthdate
+            """,
+            (username, birthdate),
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error saving birthday to DB: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 
 def delete_birthday_from_db(name):
