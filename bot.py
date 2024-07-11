@@ -6,7 +6,7 @@ import asyncio
 import requests
 import aiohttp
 import logging
-from discord import app_commands, Embed, ui, ButtonStyle, Colour
+from discord import Interaction, app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -30,7 +30,7 @@ def get_db_connection():
         dbname=os.getenv("POSTGRES_DB"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
-        host="db",
+        host="db.tessdev.fr",
         port=5432,
     )
     return conn
@@ -541,14 +541,18 @@ async def birthday_slash(
                 color=Colour.green(),
             )
             embed.set_footer(text="Tess Spy Agency")
-            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
         else:
             embed = Embed(
                 title="❌ Error",
                 description="You must provide a name and birthdate to add a birthday.",
                 color=Colour.red(),
             )
-            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
     elif action == "delete":
         if name:
             delete_birthday_from_db(name)
@@ -558,14 +562,18 @@ async def birthday_slash(
                 color=Colour.green(),
             )
             embed.set_footer(text="Tess Spy Agency")
-            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
         else:
             embed = Embed(
                 title="❌ Error",
                 description="You must provide a valid name to delete a birthday.",
                 color=Colour.red(),
             )
-            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
     elif action == "display":
         birthdays = load_birthdays_from_db()
         if name:
@@ -616,7 +624,9 @@ async def birthday_slash(
                     color=Colour.blue(),
                 )
                 embed.set_footer(text="Tess Spy Agency")
-                await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+                await interaction.response.send_message(
+                    embeds=[embed], ephemeral=hide_message
+                )
             else:
                 embed = Embed(
                     title="❌ No Birthday Found",
@@ -624,7 +634,9 @@ async def birthday_slash(
                     color=Colour.red(),
                 )
                 embed.set_footer(text="Tess Spy Agency")
-                await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+                await interaction.response.send_message(
+                    embeds=[embed], ephemeral=hide_message
+                )
         else:
             embed = Embed(
                 title="❌ No Birthdays",
@@ -632,7 +644,9 @@ async def birthday_slash(
                 color=Colour.red(),
             )
             embed.set_footer(text="Tess Spy Agency")
-            await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
 
 
 def log_message_to_db(message_data):
@@ -849,80 +863,38 @@ class LogEmbed(ui.View):
         super().__init__()
         self.logs = logs
         self.current_page = 0
-        self.page_select = ui.Select(
-            placeholder="Select a page...",
-            options=[
-                discord.SelectOption(label=f"Page {i + 1}", value=str(i))
-                for i in range(len(logs))
-            ],
-        )
-        self.page_select.callback = self.page_select_callback
-        self.add_item(self.page_select)
-
-    async def page_select_callback(self, interaction: discord.Interaction):
-        try:
-            selected_page = int(self.page_select.values[0])
-            self.current_page = selected_page
-            await interaction.response.edit_message(embed=self.get_embed(), view=self)
-        except Exception as e:
-            logging.error(f"Error in page_select_callback: {e}")
-            await interaction.response.send_message(
-                "An error occurred.", ephemeral=True
-            )
+        self.total_pages = (len(logs) + 24) // 25  # Calculate total pages
 
     @ui.button(label="Previous", style=ButtonStyle.primary)
-    async def previous_button(
-        self, interaction: discord.Interaction, button: ui.Button
-    ):
-        try:
-            if self.current_page > 0:
-                self.current_page -= 1
-                self.page_select.placeholder = f"Page {self.current_page + 1}"
-                await interaction.response.edit_message(
-                    embed=self.get_embed(), view=self
-                )
-            else:
-                await interaction.response.send_message(
-                    "You are already on the first page.", ephemeral=True
-                )
-        except Exception as e:
-            logging.error(f"Error in previous_button: {e}")
+    async def previous_button(self, interaction: Interaction, button: ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        else:
             await interaction.response.send_message(
-                "An error occurred.", ephemeral=True
+                "You are already on the first page.", ephemeral=True
             )
 
     @ui.button(label="Next", style=ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
-        try:
-            if self.current_page < len(self.logs) - 1:
-                self.current_page += 1
-                self.page_select.placeholder = f"Page {self.current_page + 1}"
-                await interaction.response.edit_message(
-                    embed=self.get_embed(), view=self
-                )
-            else:
-                await interaction.response.send_message(
-                    "You are already on the last page.", ephemeral=True
-                )
-        except Exception as e:
-            logging.error(f"Error in next_button: {e}")
+    async def next_button(self, interaction: Interaction, button: ui.Button):
+        if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        else:
             await interaction.response.send_message(
-                "An error occurred.", ephemeral=True
+                "You are already on the last page.", ephemeral=True
             )
 
     def get_embed(self):
-        log = self.logs[self.current_page]
-        embed = Embed(title=f"Log {self.current_page + 1}", color=Colour.dark_purple())
-        embed.set_thumbnail(
-            url="https://cdn.discordapp.com/attachments/1190690414190153750/1242135381592506400/logo.png?ex=664cbc38&is=664b6ab8&hm=2571cd16ba78b4f5f4477d00dde90b04cd675e5c66054deaaade14335c0ded78&"
+        start = self.current_page * 25
+        end = start + 25
+        embed = Embed(
+            title=f"Logs Page {self.current_page + 1}/{self.total_pages}",
+            color=0x4B0082,
         )
-        embed.set_footer(text="Tess Spy Agency")
         embed.timestamp = datetime.now()
-        for k, v in log.items():
-            v = str(v)
-            while len(v) > 0:
-                embed.add_field(name=k, value=v[:1024], inline=False)
-                v = v[1024:]
+        for i, log in enumerate(self.logs[start:end], start=start + 1):
+            embed.add_field(name=f"Log {i}", value=log, inline=False)
         return embed
 
 
