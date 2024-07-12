@@ -6,7 +6,7 @@ import asyncio
 import requests
 import aiohttp
 import logging
-from discord import Interaction, app_commands, Embed, ui, ButtonStyle, Colour
+from discord import Interaction, SelectOption, app_commands, Embed, ui, ButtonStyle, Colour
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -864,6 +864,7 @@ class LogEmbed(ui.View):
         self.logs = logs
         self.current_page = 0
         self.total_pages = (len(logs) + 24) // 25  # Calculate total pages
+        self.add_page_selector()
 
     @ui.button(label="Previous", style=ButtonStyle.primary)
     async def previous_button(self, interaction: Interaction, button: ui.Button):
@@ -885,17 +886,68 @@ class LogEmbed(ui.View):
                 "You are already on the last page.", ephemeral=True
             )
 
+    @ui.select(placeholder="Select a page...", options=[])
+    async def select_page(self, interaction: Interaction, select: ui.Select):
+        self.current_page = int(select.values[0])
+        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+    def add_page_selector(self):
+        options = [
+            SelectOption(label=str(i + 1), value=str(i))
+            for i in range(self.total_pages)
+        ]
+        self.select_page.options = options
+
     def get_embed(self):
         start = self.current_page * 25
         end = start + 25
         embed = Embed(
-            title=f"Logs Page {self.current_page + 1}/{self.total_pages}",
+            title=f"📝 Logs Page {self.current_page + 1}/{self.total_pages} 📝",
             color=0x4B0082,
         )
         embed.timestamp = datetime.now()
+        total_characters = 0
+        embed.set_footer(text="Tess Spy Agency")
+
         for i, log in enumerate(self.logs[start:end], start=start + 1):
-            embed.add_field(name=f"Log {i}", value=log, inline=False)
+            formatted_log = self.format_log(log)
+            total_characters += len(formatted_log)
+            if total_characters > 6000:
+                embed.add_field(
+                    name="Warning",
+                    value="Log content truncated due to Discord embed limits.",
+                    inline=False,
+                )
+                break
+            embed.add_field(name=f"Log {i}", value=formatted_log, inline=False)
+
         return embed
+
+    def format_log(self, log):
+        user = log.get("user", "Unknown User")
+        message = log.get("message", "No message").strip()
+        time = log.get("time", "Unknown time")
+        attachments = log.get("attachments", "No attachments")
+        guild = log.get("guild", "Unknown guild")
+        channel = log.get("channel", "Unknown channel")
+
+        if len(message) > 100:
+            message = message[:100] + "..."
+
+        formatted_log = (
+            f"**User**: {user}\n"
+            f"**Message**: `{message}`\n"
+            f"**Time**: {time}\n"
+            f"**Attachments**: {attachments}\n"
+            f"**Guild**: {guild}\n"
+            f"**Channel**: {channel}\n"
+        )
+
+        # Ensure no field exceeds 1024 characters
+        if len(formatted_log) > 1024:
+            formatted_log = formatted_log[:1021] + "..."
+
+        return formatted_log
 
 
 @bot.tree.command(

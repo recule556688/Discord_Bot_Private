@@ -14,12 +14,6 @@ services:
     user: "10001:10001"
     restart: unless-stopped
     container_name: karma-private-bot
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
-    depends_on:
-      - db
-    networks:
-      - discord_bot_network
 
   db:
     image: postgres:13
@@ -30,15 +24,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    networks:
-      - discord_bot_network
-      - nginx-proxy-manager_default
 
 volumes:
   postgres_data:
-
-networks:
-  nginx-proxy-manager_default:
-    external: true
-  discord_bot_network:
-    driver: bridge
