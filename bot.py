@@ -908,6 +908,12 @@ class LogEmbed(ui.View):
         embed.timestamp = datetime.now()
         total_characters = 0
         embed.set_footer(text="Tess Spy Agency")
+        # Add a field with a clickable link
+        embed.add_field(
+            name="Visit Our Website",
+            value="Click [here](https://spy.tessdev.fr) to visit the website.",
+            inline=False,
+        )
 
         for i, log in enumerate(self.logs[start:end], start=start + 1):
             formatted_log = self.format_log(log)
