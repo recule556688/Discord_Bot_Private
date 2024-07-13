@@ -30,8 +30,8 @@ def get_db_connection():
         dbname=os.getenv("POSTGRES_DB"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
-        host="db.tessdev.fr",
-        port=5432,
+        host=os.getenv("POSTGRES_HOST"),
+        port=os.getenv("POSTGRES_PORT"),
     )
     return conn
 
@@ -936,7 +936,7 @@ class LogEmbed(ui.View):
 
         formatted_log = (
             f"**User**: {user}\n"
-            f"**Message**: `{message}`\n"
+            f"**Message**: {message}\n"
             f"**Time**: {time}\n"
             f"**Attachments**: {attachments}\n"
             f"**Guild**: {guild}\n"
