@@ -925,6 +925,8 @@ class LogEmbed(ui.View):
                     inline=False,
                 )
                 break
+            if len(embed.fields) >= 25:
+                break
             embed.add_field(name=f"Log {i}", value=formatted_log, inline=False)
 
         return embed
