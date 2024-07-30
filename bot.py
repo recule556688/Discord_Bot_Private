@@ -104,7 +104,10 @@ tree = app_commands.CommandTree(client)
 # Create a global variable to store the user, message, and time
 scheduled_message = {"user": None, "message": "", "time": ""}
 
-ADDITIONAL_ALLOWED_USER_ID = 766746672964567052  # Replace with the actual user ID
+ADDITIONAL_ALLOWED_USER_ID = (
+    766746672964567052,
+    287307876366548992,
+) # Allow the bot owner and the additional user to use the owner command
 
 
 def is_owner():
