@@ -107,15 +107,15 @@ scheduled_message = {"user": None, "message": "", "time": ""}
 ADDITIONAL_ALLOWED_USER_ID = (
     766746672964567052,
     287307876366548992,
-) # Allow the bot owner and the additional user to use the owner command
+)  # Allow the bot owner and the additional user to use the owner command
 
 
 def is_owner():
-    def predicate(interaction: discord.Interaction):
+    async def predicate(interaction: discord.Interaction):
         # Check if the user is the server owner
-        is_server_owner = interaction.user.id == interaction.guild.owner.id
+        is_server_owner = interaction.user.id == interaction.guild.owner_id
         # Check if the user is the additional allowed user
-        is_additional_user = interaction.user.id == ADDITIONAL_ALLOWED_USER_ID
+        is_additional_user = interaction.user.id in ADDITIONAL_ALLOWED_USER_ID
         # Allow if the user is either the server owner or the additional allowed user
         return is_server_owner or is_additional_user
 
