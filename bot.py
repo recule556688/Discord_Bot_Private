@@ -43,26 +43,38 @@ def initialize_database():
     # Create logging_channels table if it doesn't exist
     cur.execute(
         """
-    CREATE TABLE IF NOT EXISTS logging_channels (
-        id SERIAL PRIMARY KEY,
-        channel_id BIGINT NOT NULL UNIQUE
-    );
-    """
+        CREATE TABLE IF NOT EXISTS logging_channels (
+            id SERIAL PRIMARY KEY,
+            channel_id BIGINT NOT NULL UNIQUE
+        );
+        """
     )
 
     # Create message_logs table if it doesn't exist
     cur.execute(
         """
-    CREATE TABLE IF NOT EXISTS message_logs (
-        id SERIAL PRIMARY KEY,
-        encoded_message TEXT NOT NULL
-    );
-    """
+        CREATE TABLE IF NOT EXISTS message_logs (
+            id SERIAL PRIMARY KEY,
+            encoded_message TEXT NOT NULL
+        );
+        """
+    )
+
+    # Create birthdays table if it doesn't exist
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS birthdays (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(255) NOT NULL,
+            birthdate DATE NOT NULL
+        );
+        """
     )
 
     conn.commit()
     cur.close()
     conn.close()
+
 
 
 CITY = [
