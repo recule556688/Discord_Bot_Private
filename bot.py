@@ -60,12 +60,12 @@ def initialize_database():
         """
     )
 
-    # Create birthdays table if it doesn't exist
+    # Create birthdays table with a unique constraint on the username column
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS birthdays (
             id SERIAL PRIMARY KEY,
-            username VARCHAR(255) NOT NULL,
+            username VARCHAR(255) NOT NULL UNIQUE,
             birthdate DATE NOT NULL
         );
         """
@@ -74,7 +74,6 @@ def initialize_database():
     conn.commit()
     cur.close()
     conn.close()
-
 
 
 CITY = [
@@ -530,9 +529,6 @@ def delete_birthday_from_db(name):
     conn.close()
 
 
-from discord import Colour, Embed
-
-
 @bot.tree.command(name="birthday", description="Set your birthday")
 @app_commands.describe(
     action="Add, delete, display, or get the number of days before the next birthday"
@@ -546,122 +542,114 @@ async def birthday_slash(
     birthdate: str = None,
     hide_message: bool = True,
 ):
-    if action == "add":
-        if name and birthdate:
-            birthdate = parse(birthdate).strftime("%Y-%m-%d")
-            save_birthday_to_db(name, birthdate)
-            embed = Embed(
-                title="🎉 Birthday Added",
-                description=f"Added birthday for **{name}** on {birthdate}",
-                color=Colour.green(),
-            )
-            embed.set_footer(text="Tess Spy Agency")
-            await interaction.response.send_message(
-                embeds=[embed], ephemeral=hide_message
-            )
-        else:
-            embed = Embed(
-                title="❌ Error",
-                description="You must provide a name and birthdate to add a birthday.",
-                color=Colour.red(),
-            )
-            await interaction.response.send_message(
-                embeds=[embed], ephemeral=hide_message
-            )
-    elif action == "delete":
-        if name:
-            delete_birthday_from_db(name)
-            embed = Embed(
-                title="🗑️ Birthday Deleted",
-                description=f"Deleted birthday for **{name}**",
-                color=Colour.green(),
-            )
-            embed.set_footer(text="Tess Spy Agency")
-            await interaction.response.send_message(
-                embeds=[embed], ephemeral=hide_message
-            )
-        else:
-            embed = Embed(
-                title="❌ Error",
-                description="You must provide a valid name to delete a birthday.",
-                color=Colour.red(),
-            )
-            await interaction.response.send_message(
-                embeds=[embed], ephemeral=hide_message
-            )
-    elif action == "display":
-        birthdays = load_birthdays_from_db()
-        if name:
-            if name in birthdays:
+    try:
+        if action == "add":
+            if name and birthdate:
+                birthdate = parse(birthdate).strftime("%Y-%m-%d")
+                save_birthday_to_db(name, birthdate)
                 embed = Embed(
-                    title=f"🎂 Birthday for {name}",
-                    description=f"**{name}**: {birthdays[name]}",
-                    color=Colour.blue(),
+                    title="🎉 Birthday Added",
+                    description=f"Added birthday for **{name}** on {birthdate}",
+                    color=Colour.green(),
                 )
-                embed.set_footer(text="Tess Spy Agency")
             else:
                 embed = Embed(
-                    title="❌ No Birthday Found",
-                    description=f"No birthday found for **{name}**.",
+                    title="❌ Error",
+                    description="You must provide a name and birthdate to add a birthday.",
                     color=Colour.red(),
                 )
-                embed.set_footer(text="Tess Spy Agency")
-        else:
-            if birthdays:
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
+
+        elif action == "delete":
+            if name:
+                delete_birthday_from_db(name)
                 embed = Embed(
-                    title="📅 Birthdays",
-                    color=Colour.blue(),
+                    title="🗑️ Birthday Deleted",
+                    description=f"Deleted birthday for **{name}**",
+                    color=Colour.green(),
                 )
-                embed.set_footer(text="Tess Spy Agency")
-                for name, birthdate in birthdays.items():
-                    embed.add_field(name=name, value=birthdate, inline=False)
+            else:
+                embed = Embed(
+                    title="❌ Error",
+                    description="You must provide a valid name to delete a birthday.",
+                    color=Colour.red(),
+                )
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
+
+        elif action == "display":
+            birthdays = load_birthdays_from_db()
+            if name:
+                if name in birthdays:
+                    embed = Embed(
+                        title=f"🎂 Birthday for {name}",
+                        description=f"**{name}**: {birthdays[name]}",
+                        color=Colour.blue(),
+                    )
+                else:
+                    embed = Embed(
+                        title="❌ No Birthday Found",
+                        description=f"No birthday found for **{name}**.",
+                        color=Colour.red(),
+                    )
+            else:
+                if birthdays:
+                    embed = Embed(
+                        title="📅 Birthdays",
+                        color=Colour.blue(),
+                    )
+                    for name, birthdate in birthdays.items():
+                        embed.add_field(name=name, value=birthdate, inline=False)
+                else:
+                    embed = Embed(
+                        title="❌ No Birthdays",
+                        description="No birthdays to display.",
+                        color=Colour.red(),
+                    )
+            await interaction.response.send_message(
+                embeds=[embed], ephemeral=hide_message
+            )
+
+        elif action == "next":
+            if name:
+                birthdays = load_birthdays_from_db()
+                if name in birthdays:
+                    birthdate = datetime.strptime(birthdays[name], "%Y-%m-%d")
+                    now = datetime.now()
+                    next_birthday = birthdate.replace(year=now.year)
+                    if now > next_birthday:
+                        next_birthday = next_birthday.replace(year=now.year + 1)
+                    days_left = (next_birthday - now).days
+                    embed = Embed(
+                        title=f"🎉 Next Birthday for {name}",
+                        description=f"{days_left} days until **{name}'s** next birthday.",
+                        color=Colour.blue(),
+                    )
+                else:
+                    embed = Embed(
+                        title="❌ No Birthday Found",
+                        description=f"No birthday found for **{name}**.",
+                        color=Colour.red(),
+                    )
             else:
                 embed = Embed(
                     title="❌ No Birthdays",
                     description="No birthdays to display.",
                     color=Colour.red(),
                 )
-                embed.set_footer(text="Tess Spy Agency")
-        await interaction.response.send_message(embeds=[embed], ephemeral=hide_message)
-    elif action == "next":
-        if name:
-            birthdays = load_birthdays_from_db()
-            if name in birthdays:
-                birthdate = datetime.strptime(birthdays[name], "%Y-%m-%d")
-                now = datetime.now()
-                next_birthday = birthdate.replace(year=now.year)
-                if now > next_birthday:
-                    next_birthday = next_birthday.replace(year=now.year + 1)
-                days_left = (next_birthday - now).days
-                embed = Embed(
-                    title=f"🎉 Next Birthday for {name}",
-                    description=f"{days_left} days until **{name}'s** next birthday.",
-                    color=Colour.blue(),
-                )
-                embed.set_footer(text="Tess Spy Agency")
-                await interaction.response.send_message(
-                    embeds=[embed], ephemeral=hide_message
-                )
-            else:
-                embed = Embed(
-                    title="❌ No Birthday Found",
-                    description=f"No birthday found for **{name}**.",
-                    color=Colour.red(),
-                )
-                embed.set_footer(text="Tess Spy Agency")
-                await interaction.response.send_message(
-                    embeds=[embed], ephemeral=hide_message
-                )
-        else:
-            embed = Embed(
-                title="❌ No Birthdays",
-                description="No birthdays to display.",
-                color=Colour.red(),
-            )
-            embed.set_footer(text="Tess Spy Agency")
             await interaction.response.send_message(
                 embeds=[embed], ephemeral=hide_message
             )
+
+    except Exception as e:
+        logging.error(f"Error in birthday command: {e}")
+        await interaction.response.send_message(
+            "An error occurred while processing your request.",
+            ephemeral=True,
+        )
 
 
 def log_message_to_db(message_data):
