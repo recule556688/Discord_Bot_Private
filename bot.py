@@ -473,7 +473,10 @@ async def name_autocompletion(
             if current.lower() in name.lower():
                 data.append(app_commands.Choice(name=name, value=name))
 
-    return data
+    # Limit the list to 25 items
+    limited_data = data[:25]
+
+    return limited_data
 
 
 async def action_autocompletion(
