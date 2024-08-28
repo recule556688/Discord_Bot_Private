@@ -497,23 +497,27 @@ def load_birthdays_from_db():
     cur = conn.cursor()
     cur.execute("SELECT username, birthdate FROM birthdays")
     rows = cur.fetchall()
-    birthdays = {row[0]: row[1].strftime("%Y-%m-%d") for row in rows}
+    birthdays = {row[0]: row[1].strftime("%d-%m-%Y") for row in rows}
     cur.close()
     conn.close()
     return birthdays
+
 
 
 def save_birthday_to_db(username, birthdate):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        # Parse the input date and convert it to YYYY-MM-DD format
+        parsed_date = datetime.strptime(birthdate, "%d-%m-%Y").strftime("%Y-%m-%d")
+
         cur.execute(
             """
             INSERT INTO birthdays (username, birthdate)
             VALUES (%s, %s)
             ON CONFLICT (username) DO UPDATE SET birthdate = EXCLUDED.birthdate
             """,
-            (username, birthdate),
+            (username, parsed_date),
         )
         conn.commit()
     except Exception as e:
