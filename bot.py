@@ -548,7 +548,7 @@ async def birthday_slash(
     try:
         if action == "add":
             if name and birthdate:
-                birthdate = parse(birthdate).strftime("%Y-%m-%d")
+                birthdate = parse(birthdate).strftime("%d-%m-%Y")
                 save_birthday_to_db(name, birthdate)
                 embed = Embed(
                     title="🎉 Birthday Added",
