@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 import psycopg2
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 # Setup logging
 logging.basicConfig(
@@ -501,7 +503,6 @@ def load_birthdays_from_db():
     cur.close()
     conn.close()
     return birthdays
-
 
 
 def save_birthday_to_db(username, birthdate):
@@ -1133,6 +1134,226 @@ async def server_action_slash(
                 )
 
 
+# Define a context menu command for messages
+@bot.tree.context_menu(name="Gay to Gay")
+async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
+    if message.attachments:
+        # Get the first attachment
+        attachment = message.attachments[0]
+        if attachment.content_type.startswith("image/"):
+            # Download the image
+            response = requests.get(attachment.url)
+            image_bytes = io.BytesIO(response.content)
+
+            # Open the image using Pillow
+            with Image.open(image_bytes) as img:
+                draw = ImageDraw.Draw(img)
+
+                # Set up font and text
+                font_size = max(
+                    40, int(img.size[1] / 5)
+                )  # Adjust font size based on image height
+                try:
+                    font = ImageFont.truetype(
+                        "arial.ttf", font_size
+                    )  # Ensure you have a font file accessible
+                except IOError:
+                    font = (
+                        ImageFont.load_default()
+                    )  # Fallback if custom font is not available
+
+                text = "Gay"
+
+                # Get image size
+                width, height = img.size
+
+                # Calculate text size and position using textbbox
+                text_bbox = draw.textbbox((0, 0), text, font=font)
+                text_width, text_height = (
+                    text_bbox[2] - text_bbox[0],
+                    text_bbox[3] - text_bbox[1],
+                )
+
+                # Center the text in the image
+                x = (width - text_width) / 2
+                y = (height - text_height) / 2
+
+                # Draw a semi-transparent rectangle behind the text for better visibility
+                rect_position = [
+                    x - 10,
+                    y - 10,
+                    x + text_width + 10,
+                    y + text_height + 10,
+                ]
+
+                # Add text to the image
+                draw.text((x, y), text, fill="white", font=font)
+
+                # Save the edited image to a BytesIO object
+                output_buffer = io.BytesIO()
+                img.save(output_buffer, format="PNG")
+                output_buffer.seek(0)
+
+                # Send the edited image back
+                await interaction.response.send_message(
+                    file=discord.File(fp=output_buffer, filename="edited_image.png")
+                )
+        else:
+            await interaction.response.send_message(
+                "The attachment is not an image.", ephemeral=True
+            )
+    else:
+        await interaction.response.send_message(
+            "No attachment found in the message.", ephemeral=True
+        )
+
+
+@bot.tree.context_menu(name="Ratio to Ratio")
+async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
+    if message.attachments:
+        # Get the first attachment
+        attachment = message.attachments[0]
+        if attachment.content_type.startswith("image/"):
+            # Download the image
+            response = requests.get(attachment.url)
+            image_bytes = io.BytesIO(response.content)
+
+            # Open the image using Pillow
+            with Image.open(image_bytes) as img:
+                draw = ImageDraw.Draw(img)
+
+                # Set up font and text
+                font_size = max(
+                    40, int(img.size[1] / 15)
+                )  # Adjust font size based on image height
+                try:
+                    font = ImageFont.truetype(
+                        "arial.ttf", font_size
+                    )  # Ensure you have a font file accessible
+                except IOError:
+                    font = (
+                        ImageFont.load_default()
+                    )  # Fallback if custom font is not available
+
+                text = "Ratio + don't care + didn't ask"
+
+                # Get image size
+                width, height = img.size
+
+                # Calculate text size and position using textbbox
+                text_bbox = draw.textbbox((0, 0), text, font=font)
+                text_width, text_height = (
+                    text_bbox[2] - text_bbox[0],
+                    text_bbox[3] - text_bbox[1],
+                )
+
+                # Center the text in the image
+                x = (width - text_width) / 2
+                y = (height - text_height) / 2
+
+                # Draw a semi-transparent rectangle behind the text for better visibility
+                rect_position = [
+                    x - 10,
+                    y - 10,
+                    x + text_width + 10,
+                    y + text_height + 10,
+                ]
+
+                # Add text to the image
+                draw.text((x, y), text, fill="white", font=font)
+
+                # Save the edited image to a BytesIO object
+                output_buffer = io.BytesIO()
+                img.save(output_buffer, format="PNG")
+                output_buffer.seek(0)
+
+                # Send the edited image back
+                await interaction.response.send_message(
+                    file=discord.File(fp=output_buffer, filename="edited_image.png")
+                )
+        else:
+            await interaction.response.send_message(
+                "The attachment is not an image.", ephemeral=True
+            )
+    else:
+        await interaction.response.send_message(
+            "No attachment found in the message.", ephemeral=True
+        )
+
+
+@bot.tree.context_menu(name="Féminisme to Féminisme")
+async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
+    if message.attachments:
+        # Get the first attachment
+        attachment = message.attachments[0]
+        if attachment.content_type.startswith("image/"):
+            # Download the image
+            response = requests.get(attachment.url)
+            image_bytes = io.BytesIO(response.content)
+
+            # Open the image using Pillow
+            with Image.open(image_bytes) as img:
+                draw = ImageDraw.Draw(img)
+
+                # Set up font and text
+                font_size = max(
+                    40, int(img.size[1] / 5)
+                )  # Adjust font size based on image height
+                try:
+                    font = ImageFont.truetype(
+                        "arial.ttf", font_size
+                    )  # Ensure you have a font file accessible
+                except IOError:
+                    font = (
+                        ImageFont.load_default()
+                    )  # Fallback if custom font is not available
+
+                text = "Féministe"
+
+                # Get image size
+                width, height = img.size
+
+                # Calculate text size and position using textbbox
+                text_bbox = draw.textbbox((0, 0), text, font=font)
+                text_width, text_height = (
+                    text_bbox[2] - text_bbox[0],
+                    text_bbox[3] - text_bbox[1],
+                )
+
+                # Center the text in the image
+                x = (width - text_width) / 2
+                y = (height - text_height) / 2
+
+                # Draw a semi-transparent rectangle behind the text for better visibility
+                rect_position = [
+                    x - 10,
+                    y - 10,
+                    x + text_width + 10,
+                    y + text_height + 10,
+                ]
+
+                # Add text to the image
+                draw.text((x, y), text, fill="white", font=font)
+
+                # Save the edited image to a BytesIO object
+                output_buffer = io.BytesIO()
+                img.save(output_buffer, format="PNG")
+                output_buffer.seek(0)
+
+                # Send the edited image back
+                await interaction.response.send_message(
+                    file=discord.File(fp=output_buffer, filename="edited_image.png")
+                )
+        else:
+            await interaction.response.send_message(
+                "The attachment is not an image.", ephemeral=True
+            )
+    else:
+        await interaction.response.send_message(
+            "No attachment found in the message.", ephemeral=True
+        )
+
+
 @bot.event
 async def on_ready():
     await bot.change_presence(
@@ -1226,7 +1447,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    initialize_database()
+    # initialize_database()
     asyncio.run(main())
     if os.path.exists("log_once_per_session.txt"):
         os.remove("log_once_per_session.txt")
