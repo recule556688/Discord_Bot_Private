@@ -1,5 +1,7 @@
 import json
+import random
 import typing
+import string
 import discord
 import os
 import asyncio
@@ -1354,6 +1356,111 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
         )
 
 
+# Define a context menu command to resize an image
+@bot.tree.context_menu(name="Image to emoji")
+async def resize_and_upload_as_emoji(
+    interaction: discord.Interaction, message: discord.Message
+):
+    if message.attachments:
+        # Get the first attachment
+        attachment = message.attachments[0]
+        if attachment.content_type.startswith("image/"):
+            # Download the image
+            response = requests.get(attachment.url)
+            image_bytes = io.BytesIO(response.content)
+
+            # Open the image using Pillow
+            with Image.open(image_bytes) as img:
+                # Resize the image to fit within a 128x128 pixel boundary using LANCZOS filter
+                img.thumbnail((128, 128), Image.LANCZOS)
+
+                # Save the resized image to a BytesIO object
+                output_buffer = io.BytesIO()
+                img.save(output_buffer, format="PNG", optimize=True)
+                output_buffer.seek(0)
+
+                # Check if the file size is greater than 256 KB
+                if output_buffer.getbuffer().nbytes > 256 * 1024:
+                    await interaction.response.send_message(
+                        "Image is too large to be uploaded as an emoji (must be under 256 KB).",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Upload the image as an emoji to the server
+                emoji_name = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=5)
+                )
+                guild = interaction.guild
+                try:
+                    emoji = await guild.create_custom_emoji(
+                        name=emoji_name, image=output_buffer.read()
+                    )
+                    await interaction.response.send_message(
+                        f"Emoji created successfully: <:{emoji.name}:{emoji.id}>",
+                        ephemeral=True,
+                    )
+                except discord.HTTPException as e:
+                    await interaction.response.send_message(
+                        f"Failed to create emoji: {e}", ephemeral=True
+                    )
+        else:
+            await interaction.response.send_message(
+                "The attachment is not an image.", ephemeral=True
+            )
+    else:
+        await interaction.response.send_message(
+            "No attachment found in the message.", ephemeral=True
+        )
+
+
+# Define a context menu command to resize an image
+@bot.tree.context_menu(name="Image to Sticker")
+async def resize_image(interaction: discord.Interaction, message: discord.Message):
+    if message.attachments:
+        # Get the first attachment
+        attachment = message.attachments[0]
+        if attachment.content_type.startswith("image/"):
+            # Download the image
+            response = requests.get(attachment.url)
+            image_bytes = io.BytesIO(response.content)
+
+            # Open the image using Pillow
+            with Image.open(image_bytes) as img:
+                # Save the resized image to a BytesIO object with maximum size constraint
+                output_buffer = io.BytesIO()
+                img.save(output_buffer, format="PNG", optimize=True)
+                output_buffer.seek(0)
+
+                # Check if the file size is greater than 512 KB
+                if output_buffer.getbuffer().nbytes > 512 * 1024:
+                    # If it is, reduce the quality and retry
+                    quality = 85
+                    while (
+                        output_buffer.getbuffer().nbytes > 512 * 1024 and quality > 10
+                    ):
+                        output_buffer = io.BytesIO()  # Reset buffer
+                        # Convert image to RGB mode before saving as JPEG
+                        img.convert("RGB").save(
+                            output_buffer, format="JPEG", quality=quality, optimize=True
+                        )
+                        output_buffer.seek(0)
+                        quality -= 5
+
+                # Send the resized image back
+                await interaction.response.send_message(
+                    file=discord.File(fp=output_buffer, filename="resized_image.png")
+                )
+        else:
+            await interaction.response.send_message(
+                "The attachment is not an image.", ephemeral=True
+            )
+    else:
+        await interaction.response.send_message(
+            "No attachment found in the message.", ephemeral=True
+        )
+
+
 @bot.event
 async def on_ready():
     await bot.change_presence(
@@ -1447,7 +1554,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    # initialize_database()
+    initialize_database()
     asyncio.run(main())
     if os.path.exists("log_once_per_session.txt"):
         os.remove("log_once_per_session.txt")
