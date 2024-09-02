@@ -1161,7 +1161,6 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                         font = ImageFont.truetype(
                             font_path, font_size
                         )  # Use the custom font file directly
-                        print(f"Using custom font at {font_path} with size {font_size}")
                     except IOError:
                         print("Using default font")
                         font = (
@@ -1172,7 +1171,6 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
 
                     # Get image size
                     width, height = img.size
-                    print(f"Image size: {width}x{height}")
 
                     # Calculate text size and position using textbbox
                     text_bbox = draw.textbbox((0, 0), text, font=font)
@@ -1180,22 +1178,10 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                         text_bbox[2] - text_bbox[0],
                         text_bbox[3] - text_bbox[1],
                     )
-                    print(f"Text width: {text_width}, Text height: {text_height}")
 
                     # Center the text in the image
                     x = (width - text_width) / 2
                     y = (height - text_height) / 2
-
-                    # Draw a semi-transparent rectangle behind the text for better visibility
-                    rect_position = [
-                        x - 10,
-                        y - 10,
-                        x + text_width + 10,
-                        y + text_height + 10,
-                    ]
-                    draw.rectangle(
-                        rect_position, fill=(0, 0, 0, 128)
-                    )  # Semi-transparent black rectangle
 
                     # Add text to the image
                     draw.text((x, y), text, fill="white", font=font)
@@ -1240,15 +1226,17 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                 with Image.open(image_bytes) as img:
                     draw = ImageDraw.Draw(img)
 
-                    # Set up font and text
+                    # Set up font and text using a custom font file
+                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
                     font_size = max(
                         40, int(img.size[1] / 20)
                     )  # Adjust font size based on image height
                     try:
                         font = ImageFont.truetype(
-                            "arial.ttf", font_size
-                        )  # Use a specific font
+                            font_path, font_size
+                        )  # Use the custom font file directly
                     except IOError:
+                        print("Using default font")
                         font = (
                             ImageFont.load_default()
                         )  # Fallback if custom font is not available
@@ -1312,15 +1300,17 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                 with Image.open(image_bytes) as img:
                     draw = ImageDraw.Draw(img)
 
-                    # Set up font and text
+                    # Set up font and text using a custom font file
+                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
                     font_size = max(
                         40, int(img.size[1] / 10)
                     )  # Adjust font size based on image height
                     try:
                         font = ImageFont.truetype(
-                            "arial.ttf", font_size
-                        )  # Use a specific font
+                            font_path, font_size
+                        )  # Use the custom font file directly
                     except IOError:
+                        print("Using default font")
                         font = (
                             ImageFont.load_default()
                         )  # Fallback if custom font is not available
