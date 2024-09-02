@@ -33,6 +33,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the source code into the container.
 COPY . .
 
+# Ensure the font file is copied to the working directory.
+COPY data/ /app/data/
+
 # Switch to the non-privileged user to run the application.
 USER appuser
 
