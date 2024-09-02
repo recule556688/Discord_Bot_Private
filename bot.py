@@ -1154,9 +1154,7 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                     draw = ImageDraw.Draw(img)
 
                     # Set up font and text using a custom font file
-                    font_path = os.path.join(
-                        os.getcwd(), "data/Roboto-Bold.ttf"
-                    )  # Path to your custom font file
+                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
                     font_size = max(
                         40, int(img.size[1] / 5)
                     )  # Adjust font size based on image height
