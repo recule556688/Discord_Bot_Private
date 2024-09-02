@@ -1139,7 +1139,6 @@ async def server_action_slash(
 @bot.tree.context_menu(name="Gay to Gay")
 async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
     await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
-
     if message.attachments:
         # Get the first attachment
         attachment = message.attachments[0]
