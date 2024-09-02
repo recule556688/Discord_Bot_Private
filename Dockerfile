@@ -34,7 +34,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY . .
 
 # Ensure the font file is copied to the working directory.
-COPY data/ /app/data/
+COPY data/Roboto-Bold.ttf /app/data/Roboto-Bold.ttf
+
 
 # Switch to the non-privileged user to run the application.
 USER appuser
