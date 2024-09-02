@@ -1331,16 +1331,6 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                     x = (width - text_width) / 2
                     y = (height - text_height) / 2
 
-                    # Draw a semi-transparent rectangle behind the text for better visibility
-                    rect_position = [
-                        x - 10,
-                        y - 10,
-                        x + text_width + 10,
-                        y + text_height + 10,
-                    ]
-                    draw.rectangle(
-                        rect_position, fill=(0, 0, 0, 128)
-                    )  # Semi-transparent black rectangle
 
                     # Add text to the image
                     draw.text((x, y), text, fill="white", font=font)
