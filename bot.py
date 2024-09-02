@@ -1490,6 +1490,7 @@ async def on_ready():
         logging.info(f"Synced {len(synced)} commands")
     except Exception as e:
         logging.error(f"Failed to sync commands: {e}")
+    print("Gay")
 
 
 async def authenticate():
@@ -1518,6 +1519,7 @@ async def authenticate():
             else:
                 logging.error("Failed to authenticate")
                 logging.error(data)
+
 
 
 def update_env_file(new_token):
