@@ -1155,13 +1155,17 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                     draw = ImageDraw.Draw(img)
 
                     # Set up font and text
+                    font_path = os.path.join(
+                        os.getcwd(), "arial.ttf"
+                    )  # Specify the path to arial.ttf
                     font_size = max(
                         40, int(img.size[1] / 5)
                     )  # Adjust font size based on image height
                     try:
                         font = ImageFont.truetype(
-                            "arial.ttf", font_size
-                        )  # Use a specific font
+                            font_path, font_size
+                        )  # Use the font file directly
+                        print(font_path, font_size)
                     except IOError:
                         font = (
                             ImageFont.load_default()
@@ -1171,6 +1175,8 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
 
                     # Get image size
                     width, height = img.size
+
+                    print(width, height)
 
                     # Calculate text size and position using textbbox
                     text_bbox = draw.textbbox((0, 0), text, font=font)
@@ -1182,6 +1188,17 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                     # Center the text in the image
                     x = (width - text_width) / 2
                     y = (height - text_height) / 2
+
+                    # Draw a semi-transparent rectangle behind the text for better visibility
+                    rect_position = [
+                        x - 10,
+                        y - 10,
+                        x + text_width + 10,
+                        y + text_height + 10,
+                    ]
+                    draw.rectangle(
+                        rect_position, fill=(0, 0, 0, 128)
+                    )  # Semi-transparent black rectangle
 
                     # Add text to the image
                     draw.text((x, y), text, fill="white", font=font)
@@ -1519,7 +1536,6 @@ async def authenticate():
             else:
                 logging.error("Failed to authenticate")
                 logging.error(data)
-
 
 
 def update_env_file(new_token):
