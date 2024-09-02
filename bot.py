@@ -1255,7 +1255,6 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
                     x = (width - text_width) / 2
                     y = (height - text_height) / 2
 
-
                     # Add text to the image
                     draw.text((x, y), text, fill="white", font=font)
 
@@ -1285,73 +1284,82 @@ async def add_text_to_image(interaction: discord.Interaction, message: discord.M
 @bot.tree.context_menu(name="Féminisme to Féminisme")
 async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
     await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
+
     if message.attachments:
         # Get the first attachment
         attachment = message.attachments[0]
         if attachment.content_type.startswith("image/"):
-            # Download the image
-            response = requests.get(attachment.url)
-            image_bytes = io.BytesIO(response.content)
+            try:
+                # Download the image
+                response = requests.get(attachment.url)
+                image_bytes = io.BytesIO(response.content)
 
-            # Open the image using Pillow
-            with Image.open(image_bytes) as img:
-                draw = ImageDraw.Draw(img)
+                # Open the image using Pillow
+                with Image.open(image_bytes) as img:
+                    draw = ImageDraw.Draw(img)
 
-                # Set up font and text
-                font_size = max(
-                    40, int(img.size[1] / 10)
-                )  # Adjust font size based on image height
-                try:
-                    font = ImageFont.truetype(
-                        "arial.ttf", font_size
-                    )  # Ensure you have a font file accessible
-                except IOError:
-                    font = (
-                        ImageFont.load_default()
-                    )  # Fallback if custom font is not available
+                    # Set up font and text
+                    font_size = max(
+                        40, int(img.size[1] / 10)
+                    )  # Adjust font size based on image height
+                    try:
+                        font = ImageFont.truetype(
+                            "arial.ttf", font_size
+                        )  # Use a specific font
+                    except IOError:
+                        font = (
+                            ImageFont.load_default()
+                        )  # Fallback if custom font is not available
 
-                text = "Féministe"
+                    text = "Féministe"
 
-                # Get image size
-                width, height = img.size
+                    # Get image size
+                    width, height = img.size
 
-                # Calculate text size and position using textbbox
-                text_bbox = draw.textbbox((0, 0), text, font=font)
-                text_width, text_height = (
-                    text_bbox[2] - text_bbox[0],
-                    text_bbox[3] - text_bbox[1],
-                )
+                    # Calculate text size and position using textbbox
+                    text_bbox = draw.textbbox((0, 0), text, font=font)
+                    text_width, text_height = (
+                        text_bbox[2] - text_bbox[0],
+                        text_bbox[3] - text_bbox[1],
+                    )
 
-                # Center the text in the image
-                x = (width - text_width) / 2
-                y = (height - text_height) / 2
+                    # Center the text in the image
+                    x = (width - text_width) / 2
+                    y = (height - text_height) / 2
 
-                # Draw a semi-transparent rectangle behind the text for better visibility
-                rect_position = [
-                    x - 10,
-                    y - 10,
-                    x + text_width + 10,
-                    y + text_height + 10,
-                ]
+                    # Draw a semi-transparent rectangle behind the text for better visibility
+                    rect_position = [
+                        x - 10,
+                        y - 10,
+                        x + text_width + 10,
+                        y + text_height + 10,
+                    ]
+                    draw.rectangle(
+                        rect_position, fill=(0, 0, 0, 128)
+                    )  # Semi-transparent black rectangle
 
-                # Add text to the image
-                draw.text((x, y), text, fill="white", font=font)
+                    # Add text to the image
+                    draw.text((x, y), text, fill="white", font=font)
 
-                # Save the edited image to a BytesIO object
-                output_buffer = io.BytesIO()
-                img.save(output_buffer, format="PNG")
-                output_buffer.seek(0)
+                    # Save the edited image to a BytesIO object
+                    output_buffer = io.BytesIO()
+                    img.save(output_buffer, format="PNG")
+                    output_buffer.seek(0)
 
-                # Send the edited image back
+                    # Send the edited image back as a follow-up message
+                    await interaction.followup.send(
+                        file=discord.File(fp=output_buffer, filename="edited_image.png")
+                    )
+            except Exception as e:
                 await interaction.followup.send(
-                    file=discord.File(fp=output_buffer, filename="edited_image.png")
+                    f"An error occurred: {e}", ephemeral=True
                 )
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "The attachment is not an image.", ephemeral=True
             )
     else:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "No attachment found in the message.", ephemeral=True
         )
 
