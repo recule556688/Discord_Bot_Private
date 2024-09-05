@@ -1166,32 +1166,65 @@ async def add_text_to_image_feminism(
     await add_text_to_image(interaction, message, "Femme + Féministe + Féminisme")
 
 
-# The refactored main function that processes images for any text input
 async def add_text_to_image(
     interaction: discord.Interaction, message: discord.Message, text: str
 ):
     await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
 
+    # Check for attachments first (like an image or GIF)
     if message.attachments:
         attachment = message.attachments[0]
+        # Check if it's a GIF or image
         if (
             attachment.content_type.startswith("image/")
             or attachment.content_type == "image/gif"
         ):
             await process_attachment(interaction, attachment, text)
+        else:
+            await interaction.followup.send(
+                "Unsupported file type. Please upload an image or GIF.", ephemeral=True
+            )
+
+    # If no attachments, look for URLs in the message
     elif message.content:
-        # Check if there are URLs in the message
+        # Extract URLs from the message
         urls = find_urls_in_string(message.content)
         if urls:
             for url in urls:
-                if url.lower().endswith(".gif"):
+                # Check if the URL is a Tenor GIF
+                if "tenor.com" in url:
+                    tenor_id = extract_tenor_id(url)
+                    if tenor_id:
+                        gif_url = get_tenor_gif_direct_url(tenor_id)
+                        if gif_url:
+                            await process_image_url(
+                                interaction, gif_url, text, is_gif=True
+                            )
+                        else:
+                            await interaction.followup.send(
+                                "Failed to retrieve Tenor GIF.", ephemeral=True
+                            )
+                    else:
+                        await interaction.followup.send(
+                            "Failed to extract Tenor GIF ID.", ephemeral=True
+                        )
+
+                # Check if it's a regular GIF URL
+                elif url.lower().endswith(".gif"):
                     await process_image_url(interaction, url, text, is_gif=True)
+
+                # Handle other image URLs
                 else:
                     await process_image_url(interaction, url, text)
         else:
-            await message.reply(content=text, mention_author=True)
+            await interaction.followup.send(
+                "No valid content found (image, GIF, or URL).", ephemeral=True
+            )
+
+    # Handle stickers (if applicable)
     elif message.stickers:
         await process_sticker(interaction, message.stickers[0], text)
+
     else:
         await interaction.followup.send(
             "No valid content found (image, GIF, Tenor GIF, sticker, or text).",
@@ -1199,18 +1232,51 @@ async def add_text_to_image(
         )
 
 
+# Your find_urls_in_string function
 def find_urls_in_string(string):
     regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
     urls = re.findall(regex, string)
     return [x[0] for x in urls]
 
 
+# Extract Tenor ID from Tenor URL
+def extract_tenor_id(tenor_url):
+    match = re.search(r"-(\d+)$", tenor_url)
+    if match:
+        return match.group(1)
+    return None
+
+
+# Fetch the direct GIF URL from Tenor using the Google API
+def get_tenor_gif_direct_url(tenor_id):
+    try:
+        url = f"https://tenor.googleapis.com/v2/posts?ids={tenor_id}&key={tenor_api_key}&client_key={tess_bot_id}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            # Fetch the first result and extract the GIF URL
+            return data["results"][0]["media_formats"]["gif"]["url"]
+        else:
+            print(f"Failed to fetch GIF, status code: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"Error fetching Tenor GIF: {e}")
+        return None
+
+
 async def process_attachment(interaction, attachment, text):
     try:
         response = requests.get(attachment.url)
+        if response.status_code != 200:
+            await interaction.followup.send(
+                f"Failed to download content, status code: {response.status_code}",
+                ephemeral=True,
+            )
+            return
+
         if attachment.content_type == "image/gif":
-            image_bytes = io.BytesIO(response.content)
-            await process_gif(interaction, image_bytes, text)
+            gif_bytes = io.BytesIO(response.content)
+            await process_gif(interaction, gif_bytes, text)
         else:
             image_bytes = io.BytesIO(response.content)
             await process_image(interaction, image_bytes, text)
@@ -1262,9 +1328,13 @@ async def process_image(interaction, image_bytes, text):
 async def process_gif(interaction, gif_bytes, text):
     try:
         with Image.open(gif_bytes) as img:
+            if img.format != "GIF":
+                raise ValueError("Not a valid GIF format")
+
             frames = []
+            durations = []
             for frame in ImageSequence.Iterator(img):
-                frame = frame.convert("RGBA")
+                frame = frame.convert("RGBA")  # Convert to RGBA to handle transparency
                 draw = ImageDraw.Draw(frame)
                 font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
                 font, text_width, text_height = get_fitting_font(
@@ -1273,17 +1343,25 @@ async def process_gif(interaction, gif_bytes, text):
                 x = (frame.width - text_width) / 2
                 y = (frame.height - text_height) / 2
                 draw.text((x, y), text, fill="white", font=font)
-                frames.append(frame.copy())
+                frames.append(frame.copy())  # Add the modified frame
+                durations.append(img.info["duration"])  # Preserve the frame duration
 
+            # Save the frames into a GIF without compression
             output_buffer = io.BytesIO()
             frames[0].save(
                 output_buffer,
                 format="GIF",
                 save_all=True,
-                append_images=frames[1:],
-                loop=0,
+                append_images=frames[1:],  # Add all frames
+                duration=durations,  # Set frame durations
+                loop=0,  # Keep the loop count
+                optimize=False,  # Do not optimize (better quality)
+                transparency=0,  # Preserve transparency
+                disposal=2,  # Keep the disposal method for each frame
             )
             output_buffer.seek(0)
+
+            # Send the edited GIF
             await interaction.followup.send(
                 file=discord.File(fp=output_buffer, filename="edited_image.gif")
             )
@@ -1503,7 +1581,11 @@ async def ensure_authenticated():
 async def main():
     global crafty_api_token
     global api_weather
+    global tenor_api_key
+    global tess_bot_id
 
+    tenor_api_key = os.getenv("TENOR_API_KEY")
+    tess_bot_id = os.getenv("TESS_BOT_ID")
     crafty_api_token = os.getenv("CRAFTY_API_TOKEN")
     if crafty_api_token is None:
         logging.error("Crafty API token is not set in the environment variables.")
@@ -1517,7 +1599,7 @@ async def main():
             "Bot token or api_weather is not set in the environment variables."
         )
         return  # Exit the function if the bot token is not set
-
+    # Get the API key from environment variable
     # Use await bot.start(bot_token) instead of bot.run(bot_token)
     await bot.start(bot_token)
 
