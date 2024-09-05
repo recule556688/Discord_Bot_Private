@@ -4,9 +4,9 @@ services:
   bot:
     image: getkarma/discord-bot-private:latest
     env_file:
-      - .env # Load environment variables from stack.env
+      - .env # Load environment variables
     volumes:
-      - ./data:/app/data
+      - ./app:/app  # Mount the /app folder to a specific folder on your server
     user: "10001:10001"
     restart: unless-stopped
     container_name: karma-private-bot
@@ -15,7 +15,7 @@ services:
     image: postgres:13
     container_name: db_bot
     env_file:
-      - .env  # Load environment variables from stack.env
+      - .env  # Load environment variables
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

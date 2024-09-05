@@ -164,3 +164,4 @@ cython_debug/
 .DS_Store
 log_once_per_session.txt
 data/bot.log
+postgres_data
