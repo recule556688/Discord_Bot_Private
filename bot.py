@@ -1,5 +1,6 @@
 import json
 import random
+import re
 import typing
 import string
 import discord
@@ -8,13 +9,21 @@ import asyncio
 import requests
 import aiohttp
 import logging
-from discord import Interaction, SelectOption, app_commands, Embed, ui, ButtonStyle, Colour
+from discord import (
+    Interaction,
+    SelectOption,
+    app_commands,
+    Embed,
+    ui,
+    ButtonStyle,
+    Colour,
+)
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 import psycopg2
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import io
 
 # Setup logging
@@ -1137,225 +1146,182 @@ async def server_action_slash(
 
 
 @bot.tree.context_menu(name="Gay to Gay")
-async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
-    await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
-    if message.attachments:
-        # Get the first attachment
-        attachment = message.attachments[0]
-        if attachment.content_type.startswith("image/"):
-            try:
-                # Download the image
-                response = requests.get(attachment.url)
-                image_bytes = io.BytesIO(response.content)
-
-                # Open the image using Pillow
-                with Image.open(image_bytes) as img:
-                    draw = ImageDraw.Draw(img)
-
-                    # Set up font and text using a custom font file
-                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
-                    font_size = max(
-                        40, int(img.size[1] / 5)
-                    )  # Adjust font size based on image height
-                    try:
-                        font = ImageFont.truetype(
-                            font_path, font_size
-                        )  # Use the custom font file directly
-                    except IOError:
-                        print("Using default font")
-                        font = (
-                            ImageFont.load_default()
-                        )  # Fallback if custom font is not available
-
-                    text = "Gay"
-
-                    # Get image size
-                    width, height = img.size
-
-                    # Calculate text size and position using textbbox
-                    text_bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width, text_height = (
-                        text_bbox[2] - text_bbox[0],
-                        text_bbox[3] - text_bbox[1],
-                    )
-
-                    # Center the text in the image
-                    x = (width - text_width) / 2
-                    y = (height - text_height) / 2
-
-                    # Add text to the image
-                    draw.text((x, y), text, fill="white", font=font)
-
-                    # Save the edited image to a BytesIO object
-                    output_buffer = io.BytesIO()
-                    img.save(output_buffer, format="PNG")
-                    output_buffer.seek(0)
-
-                    # Send the edited image back as a follow-up message
-                    await interaction.followup.send(
-                        file=discord.File(fp=output_buffer, filename="edited_image.png")
-                    )
-            except Exception as e:
-                await interaction.followup.send(
-                    f"An error occurred: {e}", ephemeral=True
-                )
-        else:
-            await interaction.followup.send(
-                "The attachment is not an image.", ephemeral=True
-            )
-    else:
-        await interaction.followup.send(
-            "No attachment found in the message.", ephemeral=True
-        )
+async def add_text_to_image_gay(
+    interaction: discord.Interaction, message: discord.Message
+):
+    await add_text_to_image(interaction, message, "Gay")
 
 
 @bot.tree.context_menu(name="Ratio to Ratio")
-async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
-    await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
-
-    if message.attachments:
-        # Get the first attachment
-        attachment = message.attachments[0]
-        if attachment.content_type.startswith("image/"):
-            try:
-                # Download the image
-                response = requests.get(attachment.url)
-                image_bytes = io.BytesIO(response.content)
-
-                # Open the image using Pillow
-                with Image.open(image_bytes) as img:
-                    draw = ImageDraw.Draw(img)
-
-                    # Set up font and text using a custom font file
-                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
-                    font_size = max(
-                        40, int(img.size[1] / 20)
-                    )  # Adjust font size based on image height
-                    try:
-                        font = ImageFont.truetype(
-                            font_path, font_size
-                        )  # Use the custom font file directly
-                    except IOError:
-                        print("Using default font")
-                        font = (
-                            ImageFont.load_default()
-                        )  # Fallback if custom font is not available
-
-                    text = "Ratio + don't care + didn't ask"
-
-                    # Get image size
-                    width, height = img.size
-
-                    # Calculate text size and position using textbbox
-                    text_bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width, text_height = (
-                        text_bbox[2] - text_bbox[0],
-                        text_bbox[3] - text_bbox[1],
-                    )
-
-                    # Center the text in the image
-                    x = (width - text_width) / 2
-                    y = (height - text_height) / 2
-
-                    # Add text to the image
-                    draw.text((x, y), text, fill="white", font=font)
-
-                    # Save the edited image to a BytesIO object
-                    output_buffer = io.BytesIO()
-                    img.save(output_buffer, format="PNG")
-                    output_buffer.seek(0)
-
-                    # Send the edited image back as a follow-up message
-                    await interaction.followup.send(
-                        file=discord.File(fp=output_buffer, filename="edited_image.png")
-                    )
-            except Exception as e:
-                await interaction.followup.send(
-                    f"An error occurred: {e}", ephemeral=True
-                )
-        else:
-            await interaction.followup.send(
-                "The attachment is not an image.", ephemeral=True
-            )
-    else:
-        await interaction.followup.send(
-            "No attachment found in the message.", ephemeral=True
-        )
+async def add_text_to_image_ratio(
+    interaction: discord.Interaction, message: discord.Message
+):
+    await add_text_to_image(interaction, message, "Ratio + don't care + didn't ask")
 
 
 @bot.tree.context_menu(name="Féminisme to Féminisme")
-async def add_text_to_image(interaction: discord.Interaction, message: discord.Message):
+async def add_text_to_image_feminism(
+    interaction: discord.Interaction, message: discord.Message
+):
+    await add_text_to_image(interaction, message, "Femme + Féministe + Féminisme")
+
+
+# The refactored main function that processes images for any text input
+async def add_text_to_image(
+    interaction: discord.Interaction, message: discord.Message, text: str
+):
     await interaction.response.defer()  # Acknowledge the interaction to avoid timeout
 
     if message.attachments:
-        # Get the first attachment
         attachment = message.attachments[0]
-        if attachment.content_type.startswith("image/"):
-            try:
-                # Download the image
-                response = requests.get(attachment.url)
-                image_bytes = io.BytesIO(response.content)
-
-                # Open the image using Pillow
-                with Image.open(image_bytes) as img:
-                    draw = ImageDraw.Draw(img)
-
-                    # Set up font and text using a custom font file
-                    font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
-                    font_size = max(
-                        40, int(img.size[1] / 10)
-                    )  # Adjust font size based on image height
-                    try:
-                        font = ImageFont.truetype(
-                            font_path, font_size
-                        )  # Use the custom font file directly
-                    except IOError:
-                        print("Using default font")
-                        font = (
-                            ImageFont.load_default()
-                        )  # Fallback if custom font is not available
-
-                    text = "Féministe"
-
-                    # Get image size
-                    width, height = img.size
-
-                    # Calculate text size and position using textbbox
-                    text_bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width, text_height = (
-                        text_bbox[2] - text_bbox[0],
-                        text_bbox[3] - text_bbox[1],
-                    )
-
-                    # Center the text in the image
-                    x = (width - text_width) / 2
-                    y = (height - text_height) / 2
-
-
-                    # Add text to the image
-                    draw.text((x, y), text, fill="white", font=font)
-
-                    # Save the edited image to a BytesIO object
-                    output_buffer = io.BytesIO()
-                    img.save(output_buffer, format="PNG")
-                    output_buffer.seek(0)
-
-                    # Send the edited image back as a follow-up message
-                    await interaction.followup.send(
-                        file=discord.File(fp=output_buffer, filename="edited_image.png")
-                    )
-            except Exception as e:
-                await interaction.followup.send(
-                    f"An error occurred: {e}", ephemeral=True
-                )
+        if (
+            attachment.content_type.startswith("image/")
+            or attachment.content_type == "image/gif"
+        ):
+            await process_attachment(interaction, attachment, text)
+    elif message.content:
+        # Check if there are URLs in the message
+        urls = find_urls_in_string(message.content)
+        if urls:
+            for url in urls:
+                if url.lower().endswith(".gif"):
+                    await process_image_url(interaction, url, text, is_gif=True)
+                else:
+                    await process_image_url(interaction, url, text)
         else:
-            await interaction.followup.send(
-                "The attachment is not an image.", ephemeral=True
-            )
+            await message.reply(content=text, mention_author=True)
+    elif message.stickers:
+        await process_sticker(interaction, message.stickers[0], text)
     else:
         await interaction.followup.send(
-            "No attachment found in the message.", ephemeral=True
+            "No valid content found (image, GIF, Tenor GIF, sticker, or text).",
+            ephemeral=True,
         )
+
+
+def find_urls_in_string(string):
+    regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    urls = re.findall(regex, string)
+    return [x[0] for x in urls]
+
+
+async def process_attachment(interaction, attachment, text):
+    try:
+        response = requests.get(attachment.url)
+        if attachment.content_type == "image/gif":
+            image_bytes = io.BytesIO(response.content)
+            await process_gif(interaction, image_bytes, text)
+        else:
+            image_bytes = io.BytesIO(response.content)
+            await process_image(interaction, image_bytes, text)
+    except Exception as e:
+        await interaction.followup.send(
+            f"An error occurred while processing the attachment: {e}", ephemeral=True
+        )
+
+
+async def process_image_url(interaction, url, text, is_gif=False):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            image_bytes = io.BytesIO(response.content)
+            if is_gif:
+                await process_gif(interaction, image_bytes, text)
+            else:
+                await process_image(interaction, image_bytes, text)
+        else:
+            await interaction.followup.send(
+                f"Failed to download content, status code: {response.status_code}",
+                ephemeral=True,
+            )
+    except Exception as e:
+        await interaction.followup.send(
+            f"An error occurred while processing the URL: {e}", ephemeral=True
+        )
+
+
+async def process_image(interaction, image_bytes, text):
+    with Image.open(image_bytes) as img:
+        draw = ImageDraw.Draw(img)
+        font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
+        font, text_width, text_height = get_fitting_font(
+            text, img, draw, font_path, 40, 15
+        )
+        x = (img.width - text_width) / 2
+        y = (img.height - text_height) / 2
+        draw.text((x, y), text, fill="white", font=font)
+
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format="PNG")
+        output_buffer.seek(0)
+        await interaction.followup.send(
+            file=discord.File(fp=output_buffer, filename="edited_image.png")
+        )
+
+
+async def process_gif(interaction, gif_bytes, text):
+    try:
+        with Image.open(gif_bytes) as img:
+            frames = []
+            for frame in ImageSequence.Iterator(img):
+                frame = frame.convert("RGBA")
+                draw = ImageDraw.Draw(frame)
+                font_path = os.path.join(os.getcwd(), "data", "Roboto-Bold.ttf")
+                font, text_width, text_height = get_fitting_font(
+                    text, frame, draw, font_path, 40, 15
+                )
+                x = (frame.width - text_width) / 2
+                y = (frame.height - text_height) / 2
+                draw.text((x, y), text, fill="white", font=font)
+                frames.append(frame.copy())
+
+            output_buffer = io.BytesIO()
+            frames[0].save(
+                output_buffer,
+                format="GIF",
+                save_all=True,
+                append_images=frames[1:],
+                loop=0,
+            )
+            output_buffer.seek(0)
+            await interaction.followup.send(
+                file=discord.File(fp=output_buffer, filename="edited_image.gif")
+            )
+    except Exception as e:
+        await interaction.followup.send(
+            f"An error occurred while processing the GIF: {e}", ephemeral=True
+        )
+
+
+async def process_sticker(interaction, sticker, text):
+    try:
+        sticker_url = sticker.url if hasattr(sticker, "url") else sticker.image_url
+        response = requests.get(sticker_url)
+        sticker_bytes = io.BytesIO(response.content)
+        await process_image(interaction, sticker_bytes, text)
+    except Exception as e:
+        await interaction.followup.send(
+            f"An error occurred while processing the sticker: {e}", ephemeral=True
+        )
+
+
+def get_fitting_font(text, image, draw, font_path, base_font_size, min_font_size):
+    font_size = base_font_size
+    font = ImageFont.truetype(font_path, font_size)
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
+
+    while (
+        text_width > image.size[0] * 0.8 or text_height > image.size[1] * 0.2
+    ) and font_size > min_font_size:
+        font_size -= 1
+        font = ImageFont.truetype(font_path, font_size)
+        text_bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+
+    return font, text_width, text_height
 
 
 # Define a context menu command to resize an image
