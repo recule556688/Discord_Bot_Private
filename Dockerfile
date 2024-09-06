@@ -23,16 +23,17 @@ RUN adduser \
     appuser
 
 # Install dependencies (cached separately for efficiency)
-COPY /app/requirements.txt /app/
+COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     apt-get update && apt-get install -y gcc libpq-dev && \
-    python -m pip install -r /app/requirements.txt && \
+    python -m pip install -r requirements.txt && \
     python -m pip install psycopg2-binary
 
 # Copy all source code (including the data directory) into /app
 COPY . .
 
-# Ensure the 'data' directory has the correct permissions
+# Ensure the 'data' directory exists and has the correct permissions
+RUN mkdir -p /app/data
 RUN chown -R appuser:appuser /app/data
 RUN chmod -R 755 /app/data
 
