@@ -160,3 +160,6 @@ log_once_per_session.txt
 postgres_data
 test.py
 app\data\bot.log
+app/main.py
+app/cogs
+app/cogs
