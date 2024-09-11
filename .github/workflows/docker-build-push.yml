@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'app/bot.py'
+  workflow_dispatch:
 
 jobs:
   docker-build-and-push:
