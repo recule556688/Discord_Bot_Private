@@ -32,7 +32,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy all source code (including the data directory) into /app
 COPY . .
 
-# Ensure the 'data' directory has the correct permissions
+# Ensure the 'data' directory exists and has the correct permissions
+RUN mkdir -p /app/data
 RUN chown -R appuser:appuser /app/data
 RUN chmod -R 755 /app/data
 
