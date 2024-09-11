@@ -147,6 +147,28 @@ def is_owner():
 
 
 @bot.tree.command(
+    name="addrole",
+    description="Assign yourself a specific role by its ID",
+)
+async def add_role_slash(interaction: discord.Interaction, role_id: discord.Role):
+    member = interaction.user
+
+    try:
+        await member.add_roles(role_id)
+        await interaction.response.send_message(
+            f"Role {role_id.name} has been added to you!", ephemeral=True
+        )
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            "I don't have permission to assign this role.", ephemeral=True
+        )
+    except discord.HTTPException:
+        await interaction.response.send_message(
+            "Failed to assign the role.", ephemeral=True
+        )
+
+
+@bot.tree.command(
     name="ping",
     description="Returns the bot's latency",
 )
@@ -694,9 +716,61 @@ def log_message_to_db(message_data):
     cur.close()
     conn.close()
 
+# Define the list of banned words and the ban duration
+BANNED_WORDS = ["roblox", "skibiki", "toilette", "skibidi toilette", "gay", "bebou", "quoicu", "j'aime les noirs", "j'aime les arabes", "je vote NUPES"]  # Add more words to this list
+BAN_DURATION = timedelta(hours=1)  # Ban duration (1 hour)
+
 
 @bot.event
-async def on_message(message):
+async def on_message(message: discord.Message):
+    # Ignore messages from bots
+    if message.author.bot:
+        return
+
+    # Check if any of the banned words are in the message (case insensitive)
+    message_content = message.content.lower().split()
+    for banned_word in BANNED_WORDS:
+        if banned_word in message_content:
+            try:
+                # Delete the offending message
+                await message.delete()
+
+                # Ban the user
+                await message.author.ban(
+                    reason=f"Used a banned word: {banned_word}", delete_message_days=0
+                )
+
+                # Notify the channel and the user
+                await message.channel.send(
+                    f"{message.author.mention} has been temporarily banned for using banned vocabulary related to '{banned_word}'."
+                )
+                await message.author.send(
+                    f"You have been temporarily banned from {message.guild.name} for using vocabulary related to '{banned_word}'. The ban will last for 1 hour."
+                )
+
+                # Wait for the duration of the ban (1 hour)
+                await asyncio.sleep(BAN_DURATION.total_seconds())
+
+                # Unban the user after the ban duration
+                await message.guild.unban(message.author)
+
+                # Notify the channel and the user
+                await message.channel.send(
+                    f"{message.author.mention} has been unbanned after the 1-hour ban."
+                )
+                await message.author.send(
+                    f"You have been unbanned from {message.guild.name} after the 1-hour ban."
+                )
+
+            except discord.Forbidden:
+                await message.channel.send("I don't have permission to ban this user.")
+            except discord.HTTPException as e:
+                await message.channel.send(f"Failed to ban the user due to: {e}")
+            return  # Exit the loop once a banned word is found and processed
+
+    # Make sure to still process other commands if any
+    await bot.process_commands(message)
+
     excluded_channels = load_excluded_channels()
     if message.author == bot.user or message.channel.id in excluded_channels:
         return
@@ -1511,10 +1585,18 @@ async def resize_image(interaction: discord.Interaction, message: discord.Messag
 async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
-            type=discord.ActivityType.watching, name="Watching you in the shower"
+            # type=discord.ActivityType.watching,
+            name="Watching you in the shower",
+            assets={
+                'large_image': "aide",  # Name of the large image you uploaded
+                'large_text': "Watching something",  # Tooltip when hovering over the large image
+                'small_image': "aide",  # Name of the small image you uploaded
+                'small_text': "Watching something",  # Tooltip when hovering over the small image
+            }
         ),
         status=discord.Status.dnd,
     )
+
     logging.info(f"Logged in as {bot.user.name} - {bot.user.id}")
     logging.info(f"{bot.user.name}_BOT is ready to go !")
     check_time.start()
