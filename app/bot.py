@@ -740,6 +740,7 @@ async def on_message(message: discord.Message):
         return
 
     # Check if any of the banned words are in the message (case insensitive)
+
     message_content = message.content.lower().split()
     for banned_word in BANNED_WORDS:
         if banned_word in message_content:
