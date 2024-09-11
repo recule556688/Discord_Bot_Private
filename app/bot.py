@@ -728,6 +728,9 @@ BANNED_WORDS = [
     "noirs",
     "arabes",
     "NUPES",
+    "skibi",
+    "bi",
+    "salut",
     # Add more words or phrases to this list as needed
 ]
 
