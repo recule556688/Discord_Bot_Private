@@ -716,8 +716,20 @@ def log_message_to_db(message_data):
     cur.close()
     conn.close()
 
+
 # Define the list of banned words and the ban duration
-BANNED_WORDS = ["roblox", "skibiki", "toilette", "skibidi toilette", "gay", "bebou", "quoicu", "j'aime les noirs", "j'aime les arabes", "je vote NUPES"]  # Add more words to this list
+BANNED_WORDS = [
+    "roblox",
+    "skibiki",
+    "toilette",
+    "skibidi toilette",
+    "gay",
+    "bebou",
+    "quoicu",
+    "j'aime les noirs",
+    "j'aime les arabes",
+    "je vote NUPES",
+]  # Add more words to this list
 BAN_DURATION = timedelta(hours=1)  # Ban duration (1 hour)
 
 
@@ -1588,11 +1600,11 @@ async def on_ready():
             # type=discord.ActivityType.watching,
             name="Watching you in the shower",
             assets={
-                'large_image': "aide",  # Name of the large image you uploaded
-                'large_text': "Watching something",  # Tooltip when hovering over the large image
-                'small_image': "aide",  # Name of the small image you uploaded
-                'small_text': "Watching something",  # Tooltip when hovering over the small image
-            }
+                "large_image": "aide",  # Name of the large image you uploaded
+                "large_text": "Watching something",  # Tooltip when hovering over the large image
+                "small_image": "aide",  # Name of the small image you uploaded
+                "small_text": "Watching something",  # Tooltip when hovering over the small image
+            },
         ),
         status=discord.Status.dnd,
     )
