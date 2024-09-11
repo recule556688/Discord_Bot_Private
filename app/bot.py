@@ -750,7 +750,7 @@ async def on_message(message: discord.Message):
 
                 # Ban the user
                 await message.author.ban(
-                    reason=f"Used a banned word: {banned_word}", delete_message_days=0
+                    reason=f"Used a banned word: {banned_word}"
                 )
 
                 # Notify the channel and the user
