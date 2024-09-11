@@ -721,15 +721,16 @@ def log_message_to_db(message_data):
 BANNED_WORDS = [
     "roblox",
     "skibiki",
-    "toilette",
-    "skibidi toilette",
+    "skibidi",
     "gay",
     "bebou",
     "quoicu",
-    "j'aime les noirs",
-    "j'aime les arabes",
-    "je vote NUPES",
-]  # Add more words to this list
+    "noirs",
+    "arabes",
+    "NUPES",
+    # Add more words or phrases to this list as needed
+]
+
 BAN_DURATION = timedelta(hours=1)  # Ban duration (1 hour)
 
 
