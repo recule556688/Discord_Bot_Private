@@ -1596,6 +1596,18 @@ async def resize_image(interaction: discord.Interaction, message: discord.Messag
             "No attachment found in the message.", ephemeral=True
         )
 
+@bot.tree.command(name="clear")
+@app_commands.describe(amount="The number of messages to delete")
+async def clear(interaction: discord.Interaction, amount: int, ephemeral: bool = True):
+    if amount < 1:
+        await interaction.response.send_message("Please specify a positive number of messages to delete.", ephemeral=True)
+        return
+
+    await interaction.channel.purge(limit=amount)
+    await interaction.response.send_message(
+        f"Cleared {amount} messages.", ephemeral=ephemeral
+    )
+
 
 @bot.event
 async def on_ready():
