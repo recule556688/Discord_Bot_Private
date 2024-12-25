@@ -768,20 +768,30 @@ banned_users_roles: Dict[int, Dict[int, List[int]]] = {}  # {user_id: {guild_id:
 
 async def ban_user(message, word):
     try:
+        # Store user roles before ban
         member = message.author
-        origin_guild = message.guild
+        guild_id = message.guild.id
         user_id = member.id
         
-        # Store original server and roles info
+        # Store roles (excluding @everyone)
+        user_roles = [role.id for role in member.roles if role.name != "@everyone"]
+        
+        # Initialize user in banned_users_roles if not exists
         if user_id not in banned_users_roles:
             banned_users_roles[user_id] = {}
         
-        banned_users_roles[user_id][origin_guild.id] = {
-            'roles': [role.id for role in member.roles if role.name != "@everyone"],
-            'origin_guild': origin_guild.id,
-            'expiry': utcnow() + timedelta(minutes=1)
-        }
-
+        # Store roles for this guild
+        banned_users_roles[user_id][guild_id] = user_roles
+        
+        print(f"Stored roles for {member.name} in {message.guild.name}: {user_roles}")
+        
+        # Ban the user
+        await message.guild.ban(
+            message.author,
+            reason=f"Used banned word: {word}",
+            delete_message_seconds=0
+        )
+        
         # Get the waiting room server
         waiting_room = bot.get_guild(WAITING_ROOM_SERVER_ID)
         if not waiting_room:
@@ -799,7 +809,7 @@ async def ban_user(message, word):
 
             # DM the user before kicking them
             await member.send(
-                f"You have been temporarily suspended from {origin_guild.name} for using the banned word: **{word}**\n"
+                f"You have been temporarily suspended from {message.guild.name} for using the banned word: **{word}**\n"
                 f"The suspension will last for 1 minute.\n\n"
                 f"Please join our waiting room server to be notified when your suspension expires: {invite.url}\n\n"
                 f"⚠️ Note: The following words are banned:\n"
@@ -820,7 +830,7 @@ async def ban_user(message, word):
 
             # Store suspension info
             temp_bans[user_id] = {
-                'origin_guild': origin_guild,
+                'origin_guild': message.guild,
                 'expiry': utcnow() + timedelta(minutes=1)
             }
 
@@ -1441,7 +1451,7 @@ async def add_text_to_image(
 
 # Your find_urls_in_string function
 def find_urls_in_string(string):
-    regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»"
     urls = re.findall(regex, string)
     return [x[0] for x in urls]
 
@@ -2133,33 +2143,73 @@ async def on_member_join(member):
     user_id = member.id
     guild_id = member.guild.id
     
+    print(f"Member joined: {member.name} (ID: {user_id}) in guild {member.guild.name} (ID: {guild_id})")
+    print(f"Current banned_users_roles: {banned_users_roles}")
+    
     # Check if this user has stored roles to restore
     if user_id in banned_users_roles and guild_id in banned_users_roles[user_id]:
         try:
             # Get the stored roles
-            stored_roles = banned_users_roles[user_id][guild_id]
+            stored_role_ids = banned_users_roles[user_id][guild_id]
+            print(f"Found stored roles for {member.name}: {stored_role_ids}")
             
-            # Get the role objects
+            # Get the role objects and filter out invalid ones
             roles_to_add = []
-            for role_id in stored_roles:
+            for role_id in stored_role_ids:
                 role = member.guild.get_role(role_id)
                 if role:
-                    roles_to_add.append(role)
+                    if role < member.guild.me.top_role:  # Check if bot can assign this role
+                        roles_to_add.append(role)
+                        print(f"Will restore role: {role.name}")
+                    else:
+                        print(f"Cannot restore role {role.name} - Bot's role too low")
+                else:
+                    print(f"Role ID {role_id} not found in guild")
             
             # Add the roles back
             if roles_to_add:
                 await member.add_roles(*roles_to_add, reason="Restoring roles after temporary ban")
-                logging.info(f"Restored roles for {member.name} in {member.guild.name}")
+                role_names = [role.name for role in roles_to_add]
+                print(f"Successfully restored roles for {member.name}: {role_names}")
+            else:
+                print(f"No valid roles to restore for {member.name}")
             
             # Clean up the stored roles
             del banned_users_roles[user_id][guild_id]
-            if not banned_users_roles[user_id]:  # If no more guilds, remove user entry
+            if not banned_users_roles[user_id]:
                 del banned_users_roles[user_id]
-                
-        except discord.Forbidden:
-            logging.error(f"Failed to restore roles for {member.name} - Missing permissions")
+            print(f"Cleaned up stored roles for {member.name}")
+            
+        except discord.Forbidden as e:
+            print(f"Permission error restoring roles for {member.name}: {str(e)}")
         except Exception as e:
-            logging.error(f"Error restoring roles for {member.name}: {str(e)}")
+            print(f"Error restoring roles for {member.name}: {str(e)}")
+            print(f"Error type: {type(e)}")
+
+@bot.tree.command(
+    name="check_stored_roles",
+    description="Check stored roles for a user (Admin only)"
+)
+@is_owner()
+async def check_stored_roles(interaction: discord.Interaction, user_id: str):
+    try:
+        user_id = int(user_id)
+        if user_id in banned_users_roles:
+            roles_info = banned_users_roles[user_id]
+            await interaction.response.send_message(
+                f"Stored roles for user {user_id}:\n```\n{roles_info}\n```",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"No stored roles found for user {user_id}",
+                ephemeral=True
+            )
+    except ValueError:
+        await interaction.response.send_message(
+            "Please provide a valid user ID (numbers only)",
+            ephemeral=True
+        )
 
 if __name__ == "__main__":
     initialize_database()
