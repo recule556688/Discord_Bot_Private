@@ -849,7 +849,6 @@ async def ban_user(message, word):
     except Exception as e:
         logging.error(f"Error in ban_user: {str(e)}")
 
-# Add a task to check for expired bans
 @tasks.loop(seconds=30)
 async def check_temp_bans():
     current_time = utcnow()
@@ -861,41 +860,60 @@ async def check_temp_bans():
 
     for user_id, ban_info in to_unban:
         try:
-            origin_guild = ban_info['origin_guild']
+            guild = ban_info['guild']
             
-            # Create invite to original server
-            invite = await origin_guild.text_channels[0].create_invite(
-                max_age=1800,  # 30 minutes
-                max_uses=1,
-                reason="Suspension expired invite"
-            )
+            # Make sure to unban first
+            try:
+                # Create user object for unban
+                user = discord.Object(id=user_id)
+                await guild.unban(user, reason="Temporary ban expired")
+                print(f"Successfully unbanned user {user_id} from {guild.name}")
+            except discord.NotFound:
+                print(f"User {user_id} was not found or already unbanned")
+            except discord.Forbidden:
+                print(f"Bot lacks permission to unban user {user_id}")
+            except Exception as e:
+                print(f"Error unbanning user {user_id}: {str(e)}")
+                continue  # Skip invite creation if unban fails
 
-            # Try to notify the user in the waiting room
-            waiting_room = bot.get_guild(WAITING_ROOM_SERVER_ID)
-            if waiting_room:
-                member = waiting_room.get_member(user_id)
-                if member:
+            # Only create invite after successful unban
+            try:
+                # Find first text channel we can create invite in
+                invite_channel = next(
+                    (channel for channel in guild.text_channels 
+                     if channel.permissions_for(guild.me).create_instant_invite),
+                    None
+                )
+                
+                if invite_channel:
+                    invite = await invite_channel.create_invite(
+                        max_age=1800,  # 30 minutes
+                        max_uses=1,    # Single use
+                        reason="Temporary ban expired"
+                    )
+                    
+                    # Try to notify the user
                     try:
-                        await member.send(
-                            f"Your suspension from {origin_guild.name} has expired!\n"
+                        user = await bot.fetch_user(user_id)
+                        await user.send(
+                            f"Your temporary ban from {guild.name} has expired! "
                             f"You can rejoin using this invite: {invite.url}\n"
                             "This invite will expire in 30 minutes."
                         )
                     except discord.Forbidden:
-                        # If we can't DM them, try to ping them in the waiting room
-                        waiting_channel = waiting_room.get_channel(WAITING_ROOM_CHANNEL_ID)
-                        if waiting_channel:
-                            await waiting_channel.send(
-                                f"{member.mention} Your suspension has expired! Check your DMs for the invite link."
-                            )
+                        print(f"Could not send DM to user {user_id}")
+                    except Exception as e:
+                        print(f"Error sending unban notification: {str(e)}")
+                else:
+                    print(f"Could not find suitable channel for invite in {guild.name}")
+            except Exception as e:
+                print(f"Error creating invite: {str(e)}")
 
-            # Clean up
+            # Clean up the temp ban entry regardless of invite creation success
             del temp_bans[user_id]
-            if user_id in banned_users_roles:
-                del banned_users_roles[user_id]
 
         except Exception as e:
-            logging.error(f"Error processing unban for user {user_id}: {str(e)}")
+            print(f"Error processing unban for user {user_id}: {str(e)}")
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -2025,19 +2043,7 @@ async def force_unban_all_slash(
                             max_uses=1,    # Single use
                             reason="Manual unban invite"
                         )
-                        
-                        # Try to restore previous roles first
-                        roles_restored = await restore_user_roles(user, guild)
-                        
-                        # If no roles were restored, offer role selection
-                        if not roles_restored:
-                            role_result = await give_chosen_role(user, guild)
-                            if role_result:
-                                results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (New role added)")
-                            else:
-                                results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (No role added)")
-                        else:
-                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Previous roles restored)")
+                        results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url}")
                     else:
                         results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no suitable channel)")
                 except discord.Forbidden:
