@@ -730,11 +730,26 @@ BANNED_WORDS = [
     "NUPES",
     "skibi",
     "bi",
-    "salut",
+    "melenchon",
+    "macron",
+    "lfi",
+    "trans",
+    "transidentite",
+    "fury",
+    "furys",
+    "asterion",
+    "punisher",
+    "immigre",
+    "immigré",
+    "immigrée",
+    "immigrés",
+    "immigrées",
+    "immigration",
+    "immigrante",
     # Add more words or phrases to this list as needed
 ]
 
-BAN_DURATION = timedelta(hours=1)  # Ban duration (1 hour)
+TIMEOUT_DURATION = timedelta(hours=1)  # Timeout duration (1 hour)
 
 
 @bot.event
@@ -748,40 +763,24 @@ async def on_message(message: discord.Message):
     for banned_word in BANNED_WORDS:
         if banned_word in message_content:
             try:
-                # Delete the offending message
-                await message.delete()
-
-                # Ban the user
-                await message.author.ban(
+                # Timeout the user
+                await message.author.timeout(
+                    TIMEOUT_DURATION,
                     reason=f"Used a banned word: {banned_word}"
                 )
 
                 # Notify the channel and the user
                 await message.channel.send(
-                    f"{message.author.mention} has been temporarily banned for using banned vocabulary related to '{banned_word}'."
+                    f"{message.author.mention} has been timed out for using banned vocabulary related to '{banned_word}'."
                 )
                 await message.author.send(
-                    f"You have been temporarily banned from {message.guild.name} for using vocabulary related to '{banned_word}'. The ban will last for 1 hour."
-                )
-
-                # Wait for the duration of the ban (1 hour)
-                await asyncio.sleep(BAN_DURATION.total_seconds())
-
-                # Unban the user after the ban duration
-                await message.guild.unban(message.author)
-
-                # Notify the channel and the user
-                await message.channel.send(
-                    f"{message.author.mention} has been unbanned after the 1-hour ban."
-                )
-                await message.author.send(
-                    f"You have been unbanned from {message.guild.name} after the 1-hour ban."
+                    f"You have been timed out in {message.guild.name} for using vocabulary related to '{banned_word}'. The timeout will last for 1 hour."
                 )
 
             except discord.Forbidden:
-                await message.channel.send("I don't have permission to ban this user.")
+                await message.channel.send("I don't have permission to timeout this user.")
             except discord.HTTPException as e:
-                await message.channel.send(f"Failed to ban the user due to: {e}")
+                await message.channel.send(f"Failed to timeout the user due to: {e}")
             return  # Exit the loop once a banned word is found and processed
 
     # Make sure to still process other commands if any
