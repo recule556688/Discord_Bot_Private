@@ -751,39 +751,52 @@ BANNED_WORDS = [
 
 TIMEOUT_DURATION = timedelta(hours=1)  # Timeout duration (1 hour)
 
-
 @bot.event
 async def on_message(message: discord.Message):
     # Ignore messages from bots
     if message.author.bot:
         return
 
-    # Check if any of the banned words are in the message (case insensitive)
-    message_content = message.content.lower().split()
-    for banned_word in BANNED_WORDS:
-        if banned_word in message_content:
+    # Convert message to lowercase and check each word
+    message_words = message.content.lower().split()
+    # Check if any banned word appears as a full word match
+    for word in message_words:
+        if word in [banned.lower() for banned in BANNED_WORDS]:
             try:
                 # Timeout the user
                 await message.author.timeout(
                     TIMEOUT_DURATION,
-                    reason=f"Used a banned word: {banned_word}"
+                    reason=f"Used banned word: {word}"
                 )
+                # Delete the message
+                await message.delete()
 
-                # Notify the channel and the user
+                # Send notification messages
                 await message.channel.send(
-                    f"{message.author.mention} has been timed out for using banned vocabulary related to '{banned_word}'."
+                    f"{message.author.mention} has been timed out for using banned vocabulary.",
+                    delete_after=10
                 )
-                await message.author.send(
-                    f"You have been timed out in {message.guild.name} for using vocabulary related to '{banned_word}'. The timeout will last for 1 hour."
-                )
+                try:
+                    await message.author.send(
+                        f"You have been timed out in {message.guild.name} for using banned vocabulary. The timeout will last for 1 hour."
+                    )
+                except discord.Forbidden:
+                    pass # Can't DM user
+                return
 
             except discord.Forbidden:
-                await message.channel.send("I don't have permission to timeout this user.")
+                await message.channel.send(
+                    "I don't have permission to timeout this user.",
+                    delete_after=10
+                )
             except discord.HTTPException as e:
-                await message.channel.send(f"Failed to timeout the user due to: {e}")
-            return  # Exit the loop once a banned word is found and processed
+                await message.channel.send(
+                    f"Failed to timeout user: {str(e)}",
+                    delete_after=10
+                )
+            return
 
-    # Make sure to still process other commands if any
+    # Process other commands
     await bot.process_commands(message)
 
     excluded_channels = load_excluded_channels()
