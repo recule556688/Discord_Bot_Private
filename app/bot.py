@@ -1934,7 +1934,7 @@ async def force_unban_all_slash(
             ephemeral=True
         )
         print(f"Error in force_unban_all: {str(e)}")
-    give_bot_role(user)
+    await give_bot_role(user)
 
 
 if __name__ == "__main__":
