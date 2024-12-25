@@ -1917,6 +1917,106 @@ async def give_bot_role(member: discord.Member) -> bool:
         return False
 
 
+@bot.tree.command(
+    name="force_unban_all",
+    description="Force unban a user from all servers and send invites (Admin only)",
+)
+@is_owner()
+async def force_unban_all_slash(
+    interaction: discord.Interaction,
+    user_id: str,
+):
+    try:
+        # Convert user_id to integer
+        try:
+            user_id = int(user_id)
+        except ValueError:
+            await interaction.response.send_message(
+                "Please provide a valid user ID (numbers only).", 
+                ephemeral=True
+            )
+            return
+
+        # Fetch the user
+        try:
+            user = await bot.fetch_user(user_id)
+        except discord.NotFound:
+            await interaction.response.send_message(
+                f"Could not find user with ID {user_id}.", 
+                ephemeral=True
+            )
+            return
+
+        # Acknowledge the command immediately
+        await interaction.response.send_message(
+            "Processing unban across all servers...", 
+            ephemeral=True
+        )
+
+        results = []
+        
+        # Try to unban from all guilds
+        for guild in bot.guilds:
+            try:
+                await guild.unban(user, reason="Manual unban by bot owner")
+                
+                # Create invite
+                try:
+                    # Find first text channel we can create invite in
+                    invite_channel = next(
+                        (channel for channel in guild.text_channels 
+                         if channel.permissions_for(guild.me).create_instant_invite),
+                        None
+                    )
+                    
+                    if invite_channel:
+                        invite = await invite_channel.create_invite(
+                            max_age=1800,  # 30 minutes
+                            max_uses=1,    # Single use
+                            reason="Manual unban invite"
+                        )
+                        results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url}")
+                    else:
+                        results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no suitable channel)")
+                except discord.Forbidden:
+                    results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no permission)")
+                
+            except discord.NotFound:
+                results.append(f"ℹ️ Not banned in {guild.name}")
+            except discord.Forbidden:
+                results.append(f"❌ Failed to unban from {guild.name} (no permission)")
+            except Exception as e:
+                results.append(f"❌ Error in {guild.name}: {str(e)}")
+
+        # Send results to command user
+        result_message = "\n".join(results)
+        await interaction.followup.send(
+            f"Unban results for {user.name} ({user_id}):\n```\n{result_message}\n```",
+            ephemeral=True
+        )
+
+        # Try to DM the user with all the invites
+        try:
+            invites = "\n".join([r for r in results if "Invite:" in r])
+            if invites:
+                await user.send(
+                    f"You have been unbanned from multiple servers. Here are your invites:\n```\n{invites}\n```\n"
+                    "Each invite will expire in 30 minutes and can only be used once."
+                )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "Could not DM the invites to the user. Please copy them from above.",
+                ephemeral=True
+            )
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"An unexpected error occurred: {str(e)}", 
+            ephemeral=True
+        )
+        print(f"Error in force_unban_all: {str(e)}")
+
+
 if __name__ == "__main__":
     initialize_database()
     asyncio.run(main())
