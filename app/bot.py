@@ -1808,31 +1808,41 @@ async def main():
     # Use await bot.start(bot_token) instead of bot.run(bot_token)
     await bot.start(bot_token)
 
-async def give_bot_role(member: discord.Member) -> bool:
+async def give_bot_role(user: discord.User, guild: discord.Guild) -> bool:
     """
-    Give the member the same role as the bot
+    Give the member the same role as the bot in a specific guild
     
     Args:
-        member (discord.Member): The member to give the role to
+        user (discord.User): The user to give the role to
+        guild (discord.Guild): The guild to give the role in
         
     Returns:
         bool: True if successful, False otherwise
     """
     try:
+        # Convert User to Member object
+        member = await guild.fetch_member(user.id)
+        if not member:
+            print(f"Could not fetch member {user.name} in {guild.name}")
+            return False
+            
         # Get bot's highest role
-        bot_member = member.guild.me
+        bot_member = guild.me
         bot_role = bot_member.top_role
         
         # Add the role to the member
         await member.add_roles(bot_role)
-        print(f"Gave bot role {bot_role.name} to {member.name}")
+        print(f"Gave bot role {bot_role.name} to {member.name} in {guild.name}")
         return True
         
     except discord.Forbidden:
-        print(f"Bot doesn't have permission to give roles")
+        print(f"Bot doesn't have permission to give roles in {guild.name}")
         return False
     except discord.HTTPException as e:
-        print(f"Failed to give role: {str(e)}")
+        print(f"Failed to give role in {guild.name}: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error giving role in {guild.name}: {str(e)}")
         return False
 
 
@@ -1894,7 +1904,12 @@ async def force_unban_all_slash(
                             max_uses=1,    # Single use
                             reason="Manual unban invite"
                         )
-                        results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url}")
+                        # Try to give bot role after successful unban and invite creation
+                        role_result = await give_bot_role(user, guild)
+                        if role_result:
+                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Bot role added)")
+                        else:
+                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Could not add bot role)")
                     else:
                         results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no suitable channel)")
                 except discord.Forbidden:
