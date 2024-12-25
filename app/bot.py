@@ -25,6 +25,7 @@ from dateutil.parser import parse
 import psycopg2
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import io
+from discord.utils import utcnow
 
 # Setup logging
 logging.basicConfig(
@@ -749,6 +750,113 @@ BANNED_WORDS = [
     # Add more words or phrases to this list as needed
 ]
 
+# Store temporary bans with their expiry time
+temp_bans = {}
+
+# Modify the ban code to store the ban info
+async def ban_user(message, word):
+    try:
+        # Store user roles before ban
+        member = message.author
+        user_roles = [role for role in member.roles if role.name != "@everyone"]
+
+        # Ban the user
+        await message.guild.ban(
+            message.author,
+            reason=f"Used banned word: {word}",
+            delete_message_seconds=0
+        )
+
+        # Store ban info with expiry time (1 minute from now)
+        temp_bans[message.author.id] = {
+            'guild': message.guild,
+            'expiry': utcnow() + timedelta(minutes=1),
+            'roles': user_roles
+        }
+
+        print(f"Ban applied to {message.author.name} for using banned word: {word}")
+
+        # Delete the message
+        await message.delete()
+        print(f"Message deleted: {message.content}")
+
+        # Send notification messages
+        ban_notification = (
+            f"🚫 {message.author.mention} has been temporarily banned for using the banned word: **{word}**\n\n"
+            f"⚠️ Reminder: The following words are banned:\n"
+            f"```\n{', '.join(BANNED_WORDS)}\n```\n"
+            "The ban will last for 1 minute."
+        )
+
+        await message.channel.send(
+            ban_notification,
+            delete_after=10
+        )
+
+        try:
+            await message.author.send(
+                f"You have been temporarily banned from {message.guild.name} for using the banned word: **{word}**\n"
+                f"The ban will last for 1 minute.\n\n"
+                f"⚠️ Please note that the following words are banned:\n"
+                f"```\n{', '.join(BANNED_WORDS)}```"
+            )
+            print(f"Ban notification sent to {message.author.name}")
+        except discord.Forbidden:
+            pass  # Can't DM user
+
+    except discord.Forbidden:
+        await message.channel.send(
+            "I don't have permission to ban this user.",
+            delete_after=10
+        )
+    except discord.HTTPException as e:
+        await message.channel.send(
+            f"Failed to ban user: {str(e)}",
+            delete_after=10
+        )
+        print(f"Failed to ban user: {str(e)}")
+
+# Add a task to check for expired bans
+@tasks.loop(seconds=30)
+async def check_temp_bans():
+    current_time = utcnow()
+    to_unban = []
+
+    for user_id, ban_info in temp_bans.items():
+        if current_time >= ban_info['expiry']:
+            to_unban.append((user_id, ban_info))
+
+    for user_id, ban_info in to_unban:
+        try:
+            guild = ban_info['guild']
+            await guild.unban(discord.Object(id=user_id), reason="Temporary ban expired")
+
+            # Create an invite
+            invite = await guild.text_channels[0].create_invite(
+                max_age=1800,  # 30 minutes
+                max_uses=1,    # Single use
+                reason="Automatic invite after temporary ban"
+            )
+
+            # Try to send the invite to the user
+            try:
+                user = await bot.fetch_user(user_id)
+                await user.send(
+                    f"Your temporary ban from {guild.name} has expired. "
+                    f"You can rejoin using this invite: {invite.url}\n"
+                    "This invite will expire in 30 minutes."
+                )
+            except discord.Forbidden:
+                print(f"Could not send unban notification to user {user_id}")
+            except Exception as e:
+                print(f"Error sending unban notification: {e}")
+
+            del temp_bans[user_id]
+            print(f"Unbanned user {user_id} and sent invite")
+
+        except Exception as e:
+            print(f"Error unbanning user {user_id}: {e}")
+
 @bot.event
 async def on_message(message: discord.Message):
     # Ignore messages from bots
@@ -760,60 +868,7 @@ async def on_message(message: discord.Message):
     # Check if any banned word appears as a full word match
     for word in message_words:
         if word in [banned.lower() for banned in BANNED_WORDS]:
-            try:
-                # Store user roles before ban
-                member = message.author
-                user_roles = [role for role in member.roles if role.name != "@everyone"]
-                
-                # Ban the user
-                await message.guild.ban(
-                    message.author,
-                    reason=f"Used banned word: {word}",
-                    delete_message_seconds=0
-                )
-                print(f"Ban applied to {message.author.name} for using banned word: {word}")
-                
-                # Delete the message
-                await message.delete()
-                print(f"Message deleted: {message.content}")
-
-                # Send a more detailed notification message
-                ban_notification = (
-                    f"🚫 {message.author.mention} has been temporarily banned for using the banned word: **{word}**\n\n"
-                    f"⚠️ Reminder: The following words are banned:\n"
-                    f"```\n{', '.join(BANNED_WORDS)}\n```\n"
-                    "The ban will last for 1 minute."
-                )
-
-                await message.channel.send(
-                    ban_notification,
-                    delete_after=10
-                )
-
-                try:
-                    # Send DM to banned user with more details
-                    await message.author.send(
-                        f"You have been temporarily banned from {message.guild.name} for using the banned word: **{word}**\n"
-                        f"The ban will last for 1 minute.\n\n"
-                        f"⚠️ Please note that the following words are banned:\n"
-                        f"```\n{', '.join(BANNED_WORDS)}```"
-                    )
-                    print(f"Ban notification sent to {message.author.name}")
-                except discord.Forbidden:
-                    pass  # Can't DM user
-                return
-
-            except discord.Forbidden:
-                await message.channel.send(
-                    "I don't have permission to ban this user.",
-                    delete_after=10
-                )
-            except discord.HTTPException as e:
-                await message.channel.send(
-                    f"Failed to ban user: {str(e)}",
-                    delete_after=10
-                )
-                print(f"Failed to ban user: {str(e)}")
+            await ban_user(message, word)
             return
 
     # Process other commands
@@ -1671,6 +1726,8 @@ async def on_ready():
     except Exception as e:
         logging.error(f"Failed to sync commands: {e}")
     print("Gay")
+
+    check_temp_bans.start()
 
 
 async def authenticate():
