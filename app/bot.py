@@ -770,7 +770,7 @@ async def ban_user(message, word):
     try:
         # Store user roles before ban
         member = message.author
-        guild_id = message.guild.id
+        guild = message.guild
         user_id = member.id
         
         # Store roles (excluding @everyone)
@@ -781,13 +781,20 @@ async def ban_user(message, word):
             banned_users_roles[user_id] = {}
         
         # Store roles for this guild
-        banned_users_roles[user_id][guild_id] = user_roles
+        banned_users_roles[user_id][guild.id] = user_roles
         
-        print(f"Stored roles for {member.name} in {message.guild.name}: {user_roles}")
+        print(f"Stored roles for {member.name} in {guild.name}: {user_roles}")
+        
+        # Store ban info with expiry time (1 minute from now)
+        temp_bans[user_id] = {
+            'guild_id': guild.id,  # Store guild ID instead of guild object
+            'guild': guild,        # Store guild object for reference
+            'expiry': utcnow() + timedelta(minutes=1)
+        }
         
         # Ban the user
-        await message.guild.ban(
-            message.author,
+        await guild.ban(
+            member,
             reason=f"Used banned word: {word}",
             delete_message_seconds=0
         )
@@ -809,7 +816,7 @@ async def ban_user(message, word):
 
             # DM the user before kicking them
             await member.send(
-                f"You have been temporarily suspended from {message.guild.name} for using the banned word: **{word}**\n"
+                f"You have been temporarily suspended from {guild.name} for using the banned word: **{word}**\n"
                 f"The suspension will last for 1 minute.\n\n"
                 f"Please join our waiting room server to be notified when your suspension expires: {invite.url}\n\n"
                 f"⚠️ Note: The following words are banned:\n"
@@ -827,12 +834,6 @@ async def ban_user(message, word):
                 f"🚫 {member.mention} has been temporarily suspended for using the banned word: **{word}**\n"
                 "They will be able to rejoin in 1 minute."
             )
-
-            # Store suspension info
-            temp_bans[user_id] = {
-                'origin_guild': message.guild,
-                'expiry': utcnow() + timedelta(minutes=1)
-            }
 
         except discord.Forbidden:
             await message.channel.send(
@@ -860,25 +861,19 @@ async def check_temp_bans():
 
     for user_id, ban_info in to_unban:
         try:
-            guild = ban_info['guild']
+            guild = ban_info.get('guild') or bot.get_guild(ban_info['guild_id'])
+            if not guild:
+                print(f"Could not find guild for user {user_id}")
+                continue
+
+            # Create user object for unban
+            user = discord.Object(id=user_id)
             
-            # Make sure to unban first
             try:
-                # Create user object for unban
-                user = discord.Object(id=user_id)
                 await guild.unban(user, reason="Temporary ban expired")
                 print(f"Successfully unbanned user {user_id} from {guild.name}")
-            except discord.NotFound:
-                print(f"User {user_id} was not found or already unbanned")
-            except discord.Forbidden:
-                print(f"Bot lacks permission to unban user {user_id}")
-            except Exception as e:
-                print(f"Error unbanning user {user_id}: {str(e)}")
-                continue  # Skip invite creation if unban fails
-
-            # Only create invite after successful unban
-            try:
-                # Find first text channel we can create invite in
+                
+                # Create invite
                 invite_channel = next(
                     (channel for channel in guild.text_channels 
                      if channel.permissions_for(guild.me).create_instant_invite),
@@ -888,11 +883,10 @@ async def check_temp_bans():
                 if invite_channel:
                     invite = await invite_channel.create_invite(
                         max_age=1800,  # 30 minutes
-                        max_uses=1,    # Single use
+                        max_uses=1,
                         reason="Temporary ban expired"
                     )
                     
-                    # Try to notify the user
                     try:
                         user = await bot.fetch_user(user_id)
                         await user.send(
@@ -904,12 +898,15 @@ async def check_temp_bans():
                         print(f"Could not send DM to user {user_id}")
                     except Exception as e:
                         print(f"Error sending unban notification: {str(e)}")
-                else:
-                    print(f"Could not find suitable channel for invite in {guild.name}")
+                
+            except discord.NotFound:
+                print(f"User {user_id} was not found or already unbanned from {guild.name}")
+            except discord.Forbidden:
+                print(f"Bot lacks permission to unban user {user_id} from {guild.name}")
             except Exception as e:
-                print(f"Error creating invite: {str(e)}")
-
-            # Clean up the temp ban entry regardless of invite creation success
+                print(f"Error unbanning user {user_id} from {guild.name}: {str(e)}")
+            
+            # Clean up the temp ban entry
             del temp_bans[user_id]
 
         except Exception as e:
