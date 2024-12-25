@@ -1808,87 +1808,6 @@ async def main():
     # Use await bot.start(bot_token) instead of bot.run(bot_token)
     await bot.start(bot_token)
 
-
-@bot.tree.command(
-    name="force_unban",
-    description="Force unban a user and send them an invite (Admin only)",
-)
-@is_owner()
-async def force_unban_slash(
-    interaction: discord.Interaction,
-    user_id: str,
-):
-    # Check if we're in a guild since we need one to unban
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "This command can only be used in a server.", 
-            ephemeral=True
-        )
-        return
-
-    try:
-        # Convert user_id to integer
-        user_id = int(user_id)
-        
-        # Get the user object
-        user = await bot.fetch_user(user_id)
-        
-        # Unban the user
-        await interaction.guild.unban(user, reason="Manual unban by bot owner")
-        
-        # Create an invite
-        invite = await interaction.channel.create_invite(
-            max_age=1800,  # 30 minutes
-            max_uses=1,    # Single use
-            reason="Manual unban invite"
-        )
-        
-        # Try to send the invite to the user
-        try:
-            await user.send(
-                f"You have been unbanned from {interaction.guild.name}. "
-                f"You can rejoin using this invite: {invite.url}\n"
-                "This invite will expire in 30 minutes."
-            )
-            await interaction.response.send_message(
-                f"Successfully unbanned {user.name} and sent invite.", 
-                ephemeral=True
-            )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                f"Unbanned {user.name} but couldn't send them a DM. Invite link: {invite.url}",
-                ephemeral=True
-            )
-            
-    except ValueError:
-        await interaction.response.send_message(
-            "Invalid user ID format.", 
-            ephemeral=True
-        )
-    except discord.NotFound:
-        await interaction.response.send_message(
-            "User not found.", 
-            ephemeral=True
-        )
-    except discord.HTTPException as e:
-        await interaction.response.send_message(
-            f"Error: {str(e)}", 
-            ephemeral=True
-        )
-    # Add to the force_unban command:
-    # Try to give bot role
-    try:
-        await give_bot_role(user)
-        await interaction.followup.send(
-            f"Successfully gave bot role to {user.name}",
-            ephemeral=True
-        )
-    except Exception as e:
-        await interaction.followup.send(
-            f"Failed to give bot role: {str(e)}",
-            ephemeral=True
-        )
-
 async def give_bot_role(member: discord.Member) -> bool:
     """
     Give the member the same role as the bot
@@ -2015,6 +1934,7 @@ async def force_unban_all_slash(
             ephemeral=True
         )
         print(f"Error in force_unban_all: {str(e)}")
+    give_bot_role(user)
 
 
 if __name__ == "__main__":
