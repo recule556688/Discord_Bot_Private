@@ -769,7 +769,7 @@ async def on_message(message: discord.Message):
                 await message.guild.ban(
                     message.author,
                     reason=f"Used banned word: {word}",
-                    delete_message_days=0
+                    delete_message_seconds=0
                 )
                 print(f"Ban applied to {message.author.name} for using banned word: {word}")
                 
@@ -777,55 +777,30 @@ async def on_message(message: discord.Message):
                 await message.delete()
                 print(f"Message deleted: {message.content}")
 
-                # Schedule unban after 1 minute
-                await asyncio.sleep(60)  # Wait for 1 minute
-                
-                # Unban the user
-                await message.guild.unban(message.author, reason="Temporary ban expired")
-                
-                # Try to add the user back with their roles
-                try:
-                    # Create an invite
-                    invite = await message.channel.create_invite(max_uses=1, max_age=120)
-                    
-                    # Send the invite to the user
-                    await message.author.send(
-                        f"Your temporary ban has expired. You can rejoin using this invite: {invite.url}"
-                    )
-                    
-                    # Wait for the user to rejoin and restore roles
-                    def check(member):
-                        return member.id == message.author.id
-                    
-                    try:
-                        member = await bot.wait_for('member_join', timeout=120.0, check=check)
-                        # Restore roles
-                        for role in user_roles:
-                            try:
-                                await member.add_roles(role)
-                            except discord.HTTPException:
-                                continue
-                    except asyncio.TimeoutError:
-                        pass
-                        
-                except discord.Forbidden:
-                    print(f"Could not send invite to {message.author.name}")
-                
-                # Send notification messages
+                # Send a more detailed notification message
+                ban_notification = (
+                    f"🚫 {message.author.mention} has been temporarily banned for using the banned word: **{word}**\n\n"
+                    f"⚠️ Reminder: The following words are banned:\n"
+                    f"```\n{', '.join(BANNED_WORDS)}\n```\n"
+                    "The ban will last for 1 minute."
+                )
+
                 await message.channel.send(
-                    f"{message.author.mention} has been temporarily banned for using banned vocabulary.",
+                    ban_notification,
                     delete_after=10
                 )
-                print(f"Notification message sent to {message.channel.name}")
-                
+
                 try:
+                    # Send DM to banned user with more details
                     await message.author.send(
-                        f"You have been temporarily banned from {message.guild.name} for using banned vocabulary. "
-                        "The ban will last for 1 minute."
+                        f"You have been temporarily banned from {message.guild.name} for using the banned word: **{word}**\n"
+                        f"The ban will last for 1 minute.\n\n"
+                        f"⚠️ Please note that the following words are banned:\n"
+                        f"```\n{', '.join(BANNED_WORDS)}```"
                     )
                     print(f"Ban notification sent to {message.author.name}")
                 except discord.Forbidden:
-                    pass # Can't DM user
+                    pass  # Can't DM user
                 return
 
             except discord.Forbidden:
