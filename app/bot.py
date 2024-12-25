@@ -1846,6 +1846,93 @@ async def give_bot_role(user: discord.User, guild: discord.Guild) -> bool:
         return False
 
 
+async def list_available_roles(guild: discord.Guild) -> list[discord.Role]:
+    """Get list of assignable roles in the guild"""
+    # Filter roles that are:
+    # - Below the bot's highest role (can be assigned)
+    # - Not managed by integrations
+    # - Not @everyone
+    bot_top_role = guild.me.top_role
+    return [
+        role for role in guild.roles
+        if role < bot_top_role 
+        and not role.managed 
+        and role.name != "@everyone"
+    ]
+
+async def give_chosen_role(user: discord.User, guild: discord.Guild) -> bool:
+    """
+    Let the user choose and receive a role in the guild
+    
+    Args:
+        user (discord.User): The user to give the role to
+        guild (discord.Guild): The guild to give the role in
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Convert User to Member object
+        member = await guild.fetch_member(user.id)
+        if not member:
+            print(f"Could not fetch member {user.name} in {guild.name}")
+            return False
+            
+        # Get available roles
+        available_roles = await list_available_roles(guild)
+        if not available_roles:
+            print(f"No available roles to give in {guild.name}")
+            return False
+            
+        # Create role selection message
+        role_list = "\n".join([f"{idx + 1}. {role.name}" for idx, role in enumerate(available_roles)])
+        selection_message = (
+            f"Available roles in {guild.name}:\n"
+            f"```\n{role_list}\n```\n"
+            "Reply with the number of the role you want within 5 minutes."
+        )
+        
+        # Send selection message and wait for response
+        try:
+            dm_channel = await user.create_dm()
+            selection_msg = await dm_channel.send(selection_message)
+            
+            def check(m):
+                return (
+                    m.channel == dm_channel 
+                    and m.author == user 
+                    and m.content.isdigit() 
+                    and 1 <= int(m.content) <= len(available_roles)
+                )
+            
+            try:
+                response = await bot.wait_for('message', timeout=300.0, check=check)
+                selected_role = available_roles[int(response.content) - 1]
+                
+                # Add the selected role
+                await member.add_roles(selected_role)
+                await dm_channel.send(f"✅ Given role {selected_role.name} in {guild.name}")
+                print(f"Gave role {selected_role.name} to {member.name} in {guild.name}")
+                return True
+                
+            except asyncio.TimeoutError:
+                await dm_channel.send(f"❌ Role selection timed out for {guild.name}")
+                return False
+                
+        except discord.Forbidden:
+            print(f"Cannot send DMs to {user.name}")
+            return False
+            
+    except discord.Forbidden:
+        print(f"Bot doesn't have permission to give roles in {guild.name}")
+        return False
+    except discord.HTTPException as e:
+        print(f"Failed to give role in {guild.name}: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error giving role in {guild.name}: {str(e)}")
+        return False
+
 @bot.tree.command(
     name="force_unban_all",
     description="Force unban a user from all servers and send invites (Admin only)",
@@ -1904,12 +1991,12 @@ async def force_unban_all_slash(
                             max_uses=1,    # Single use
                             reason="Manual unban invite"
                         )
-                        # Try to give bot role after successful unban and invite creation
-                        role_result = await give_bot_role(user, guild)
+                        # Try to give chosen role after successful unban and invite creation
+                        role_result = await give_chosen_role(user, guild)
                         if role_result:
-                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Bot role added)")
+                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Role added)")
                         else:
-                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Could not add bot role)")
+                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (No role added)")
                     else:
                         results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no suitable channel)")
                 except discord.Forbidden:
