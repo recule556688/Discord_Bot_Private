@@ -2128,6 +2128,39 @@ async def restore_user_roles(user: discord.User, guild: discord.Guild) -> bool:
         print(f"Error restoring roles in {guild.name}: {str(e)}")
         return False
 
+@bot.event
+async def on_member_join(member):
+    user_id = member.id
+    guild_id = member.guild.id
+    
+    # Check if this user has stored roles to restore
+    if user_id in banned_users_roles and guild_id in banned_users_roles[user_id]:
+        try:
+            # Get the stored roles
+            stored_roles = banned_users_roles[user_id][guild_id]
+            
+            # Get the role objects
+            roles_to_add = []
+            for role_id in stored_roles:
+                role = member.guild.get_role(role_id)
+                if role:
+                    roles_to_add.append(role)
+            
+            # Add the roles back
+            if roles_to_add:
+                await member.add_roles(*roles_to_add, reason="Restoring roles after temporary ban")
+                logging.info(f"Restored roles for {member.name} in {member.guild.name}")
+            
+            # Clean up the stored roles
+            del banned_users_roles[user_id][guild_id]
+            if not banned_users_roles[user_id]:  # If no more guilds, remove user entry
+                del banned_users_roles[user_id]
+                
+        except discord.Forbidden:
+            logging.error(f"Failed to restore roles for {member.name} - Missing permissions")
+        except Exception as e:
+            logging.error(f"Error restoring roles for {member.name}: {str(e)}")
+
 if __name__ == "__main__":
     initialize_database()
     asyncio.run(main())
