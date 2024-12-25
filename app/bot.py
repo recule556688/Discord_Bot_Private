@@ -768,18 +768,22 @@ async def on_message(message: discord.Message):
                     TIMEOUT_DURATION,
                     reason=f"Used banned word: {word}"
                 )
+                print(f"Timeout applied to {message.author.name} for using banned word: {word}")
                 # Delete the message
                 await message.delete()
+                print(f"Message deleted: {message.content}")
 
                 # Send notification messages
                 await message.channel.send(
                     f"{message.author.mention} has been timed out for using banned vocabulary.",
                     delete_after=10
                 )
+                print(f"Notification message sent to {message.channel.name}")
                 try:
                     await message.author.send(
                         f"You have been timed out in {message.guild.name} for using banned vocabulary. The timeout will last for 1 hour."
                     )
+                    print(f"Timeout notification sent to {message.author.name}")
                 except discord.Forbidden:
                     pass # Can't DM user
                 return
@@ -794,6 +798,7 @@ async def on_message(message: discord.Message):
                     f"Failed to timeout user: {str(e)}",
                     delete_after=10
                 )
+                print(f"Failed to timeout user: {str(e)}")
             return
 
     # Process other commands
