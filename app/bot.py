@@ -137,12 +137,18 @@ ADDITIONAL_ALLOWED_USER_ID = (
 
 def is_owner():
     async def predicate(interaction: discord.Interaction):
-        # Check if the user is the server owner
-        is_server_owner = interaction.user.id == interaction.guild.owner_id
-        # Check if the user is the additional allowed user
-        is_additional_user = interaction.user.id in ADDITIONAL_ALLOWED_USER_ID
-        # Allow if the user is either the server owner or the additional allowed user
-        return is_server_owner or is_additional_user
+        # Check if the user is the additional allowed user first
+        if interaction.user.id in ADDITIONAL_ALLOWED_USER_ID:
+            return True
+            
+        # Check if we're in a guild
+        if interaction.guild is not None:
+            # Check if the user is the server owner
+            is_server_owner = interaction.user.id == interaction.guild.owner_id
+            return is_server_owner
+            
+        # If we're in DMs, only allow the additional users
+        return False
 
     return app_commands.check(predicate)
 
@@ -1807,11 +1813,19 @@ async def main():
     name="force_unban",
     description="Force unban a user and send them an invite (Admin only)",
 )
-@is_owner()  # Make sure only the bot owner can use this
+@is_owner()
 async def force_unban_slash(
     interaction: discord.Interaction,
-    user_id: str,  # The ID of the user to unban
+    user_id: str,
 ):
+    # Check if we're in a guild since we need one to unban
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command can only be used in a server.", 
+            ephemeral=True
+        )
+        return
+
     try:
         # Convert user_id to integer
         user_id = int(user_id)
