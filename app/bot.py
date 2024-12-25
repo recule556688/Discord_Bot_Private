@@ -26,6 +26,7 @@ import psycopg2
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import io
 from discord.utils import utcnow
+from typing import Dict, List, Optional
 
 # Setup logging
 logging.basicConfig(
@@ -133,6 +134,9 @@ ADDITIONAL_ALLOWED_USER_ID = (
     766746672964567052,
     287307876366548992,
 )  # Allow the bot owner and the additional user to use the owner command
+
+WAITING_ROOM_SERVER_ID = 1321594106027184150  # Replace with your waiting room server ID
+WAITING_ROOM_CHANNEL_ID = 1321594106639810612  # Replace with your welcome channel ID
 
 
 def is_owner():
@@ -759,68 +763,81 @@ BANNED_WORDS = [
 # Store temporary bans with their expiry time
 temp_bans = {}
 
-# Modify the ban code to store the ban info
+# Store banned users' roles
+banned_users_roles: Dict[int, Dict[int, List[int]]] = {}  # {user_id: {guild_id: [role_ids]}}
+
 async def ban_user(message, word):
     try:
-        # Store user roles before ban
         member = message.author
-        user_roles = [role for role in member.roles if role.name != "@everyone"]
-
-        # Ban the user
-        await message.guild.ban(
-            message.author,
-            reason=f"Used banned word: {word}",
-            delete_message_seconds=0
-        )
-
-        # Store ban info with expiry time (1 minute from now)
-        temp_bans[message.author.id] = {
-            'guild': message.guild,
-            'expiry': utcnow() + timedelta(minutes=1),
-            'roles': user_roles
+        origin_guild = message.guild
+        user_id = member.id
+        
+        # Store original server and roles info
+        if user_id not in banned_users_roles:
+            banned_users_roles[user_id] = {}
+        
+        banned_users_roles[user_id][origin_guild.id] = {
+            'roles': [role.id for role in member.roles if role.name != "@everyone"],
+            'origin_guild': origin_guild.id,
+            'expiry': utcnow() + timedelta(minutes=1)
         }
 
-        print(f"Ban applied to {message.author.name} for using banned word: {word}")
-
-        # Delete the message
-        await message.delete()
-        print(f"Message deleted: {message.content}")
-
-        # Send notification messages
-        ban_notification = (
-            f"🚫 {message.author.mention} has been temporarily banned for using the banned word: **{word}**\n\n"
-            f"⚠️ Reminder: The following words are banned:\n"
-            f"```\n{', '.join(BANNED_WORDS)}\n```\n"
-            "The ban will last for 1 minute."
-        )
-
-        await message.channel.send(
-            ban_notification,
-            delete_after=10
-        )
+        # Get the waiting room server
+        waiting_room = bot.get_guild(WAITING_ROOM_SERVER_ID)
+        if not waiting_room:
+            logging.error("Waiting room server not found!")
+            return
 
         try:
-            await message.author.send(
-                f"You have been temporarily banned from {message.guild.name} for using the banned word: **{word}**\n"
-                f"The ban will last for 1 minute.\n\n"
-                f"⚠️ Please note that the following words are banned:\n"
+            # Create an invite to the waiting room
+            waiting_channel = waiting_room.get_channel(WAITING_ROOM_CHANNEL_ID)
+            invite = await waiting_channel.create_invite(
+                max_age=300,  # 5 minutes
+                max_uses=1,
+                unique=True
+            )
+
+            # DM the user before kicking them
+            await member.send(
+                f"You have been temporarily suspended from {origin_guild.name} for using the banned word: **{word}**\n"
+                f"The suspension will last for 1 minute.\n\n"
+                f"Please join our waiting room server to be notified when your suspension expires: {invite.url}\n\n"
+                f"⚠️ Note: The following words are banned:\n"
                 f"```\n{', '.join(BANNED_WORDS)}```"
             )
-            print(f"Ban notification sent to {message.author.name}")
-        except discord.Forbidden:
-            pass  # Can't DM user
 
-    except discord.Forbidden:
-        await message.channel.send(
-            "I don't have permission to ban this user.",
-            delete_after=10
-        )
-    except discord.HTTPException as e:
-        await message.channel.send(
-            f"Failed to ban user: {str(e)}",
-            delete_after=10
-        )
-        print(f"Failed to ban user: {str(e)}")
+            # Kick the user from the original server
+            await member.kick(reason=f"Used banned word: {word}")
+            
+            # Delete the message
+            await message.delete()
+
+            # Send notification in the original channel
+            await message.channel.send(
+                f"🚫 {member.mention} has been temporarily suspended for using the banned word: **{word}**\n"
+                "They will be able to rejoin in 1 minute."
+            )
+
+            # Store suspension info
+            temp_bans[user_id] = {
+                'origin_guild': origin_guild,
+                'expiry': utcnow() + timedelta(minutes=1)
+            }
+
+        except discord.Forbidden:
+            await message.channel.send(
+                "I don't have permission to perform this action.",
+                delete_after=10
+            )
+        except Exception as e:
+            logging.error(f"Error in ban_user: {str(e)}")
+            await message.channel.send(
+                "An error occurred while processing the suspension.",
+                delete_after=10
+            )
+
+    except Exception as e:
+        logging.error(f"Error in ban_user: {str(e)}")
 
 # Add a task to check for expired bans
 @tasks.loop(seconds=30)
@@ -834,34 +851,41 @@ async def check_temp_bans():
 
     for user_id, ban_info in to_unban:
         try:
-            guild = ban_info['guild']
-            await guild.unban(discord.Object(id=user_id), reason="Temporary ban expired")
-
-            # Create an invite
-            invite = await guild.text_channels[0].create_invite(
+            origin_guild = ban_info['origin_guild']
+            
+            # Create invite to original server
+            invite = await origin_guild.text_channels[0].create_invite(
                 max_age=1800,  # 30 minutes
-                max_uses=1,    # Single use
-                reason="Automatic invite after temporary ban"
+                max_uses=1,
+                reason="Suspension expired invite"
             )
 
-            # Try to send the invite to the user
-            try:
-                user = await bot.fetch_user(user_id)
-                await user.send(
-                    f"Your temporary ban from {guild.name} has expired. "
-                    f"You can rejoin using this invite: {invite.url}\n"
-                    "This invite will expire in 30 minutes."
-                )
-            except discord.Forbidden:
-                print(f"Could not send unban notification to user {user_id}")
-            except Exception as e:
-                print(f"Error sending unban notification: {e}")
+            # Try to notify the user in the waiting room
+            waiting_room = bot.get_guild(WAITING_ROOM_SERVER_ID)
+            if waiting_room:
+                member = waiting_room.get_member(user_id)
+                if member:
+                    try:
+                        await member.send(
+                            f"Your suspension from {origin_guild.name} has expired!\n"
+                            f"You can rejoin using this invite: {invite.url}\n"
+                            "This invite will expire in 30 minutes."
+                        )
+                    except discord.Forbidden:
+                        # If we can't DM them, try to ping them in the waiting room
+                        waiting_channel = waiting_room.get_channel(WAITING_ROOM_CHANNEL_ID)
+                        if waiting_channel:
+                            await waiting_channel.send(
+                                f"{member.mention} Your suspension has expired! Check your DMs for the invite link."
+                            )
 
+            # Clean up
             del temp_bans[user_id]
-            print(f"Unbanned user {user_id} and sent invite")
+            if user_id in banned_users_roles:
+                del banned_users_roles[user_id]
 
         except Exception as e:
-            print(f"Error unbanning user {user_id}: {e}")
+            logging.error(f"Error processing unban for user {user_id}: {str(e)}")
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -1991,12 +2015,19 @@ async def force_unban_all_slash(
                             max_uses=1,    # Single use
                             reason="Manual unban invite"
                         )
-                        # Try to give chosen role after successful unban and invite creation
-                        role_result = await give_chosen_role(user, guild)
-                        if role_result:
-                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Role added)")
+                        
+                        # Try to restore previous roles first
+                        roles_restored = await restore_user_roles(user, guild)
+                        
+                        # If no roles were restored, offer role selection
+                        if not roles_restored:
+                            role_result = await give_chosen_role(user, guild)
+                            if role_result:
+                                results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (New role added)")
+                            else:
+                                results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (No role added)")
                         else:
-                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (No role added)")
+                            results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url} (Previous roles restored)")
                     else:
                         results.append(f"⚠️ Unbanned from {guild.name} but couldn't create invite (no suitable channel)")
                 except discord.Forbidden:
@@ -2037,6 +2068,65 @@ async def force_unban_all_slash(
         )
         print(f"Error in force_unban_all: {str(e)}")
     await give_bot_role(user, guild)
+
+async def restore_user_roles(user: discord.User, guild: discord.Guild) -> bool:
+    """
+    Restore user's previous roles in the guild
+    
+    Args:
+        user (discord.User): The user to restore roles for
+        guild (discord.Guild): The guild to restore roles in
+        
+    Returns:
+        bool: True if roles were restored, False otherwise
+    """
+    try:
+        # Check if we have stored roles
+        user_id = user.id
+        guild_id = guild.id
+        
+        if user_id not in banned_users_roles or guild_id not in banned_users_roles[user_id]:
+            print(f"No stored roles found for {user.name} in {guild.name}")
+            return False
+            
+        # Get stored role IDs
+        stored_role_ids = banned_users_roles[user_id][guild_id]
+        
+        # Convert User to Member
+        member = await guild.fetch_member(user.id)
+        if not member:
+            print(f"Could not fetch member {user.name} in {guild.name}")
+            return False
+            
+        # Get role objects from IDs
+        roles_to_add = []
+        for role_id in stored_role_ids:
+            role = guild.get_role(role_id)
+            if role and role < guild.me.top_role:  # Only add roles below bot's highest role
+                roles_to_add.append(role)
+        
+        if not roles_to_add:
+            print(f"No valid roles to restore for {user.name} in {guild.name}")
+            return False
+            
+        # Add the roles
+        await member.add_roles(*roles_to_add, reason="Restoring roles after unban")
+        
+        # Clean up stored roles
+        del banned_users_roles[user_id][guild_id]
+        if not banned_users_roles[user_id]:
+            del banned_users_roles[user_id]
+            
+        role_names = [role.name for role in roles_to_add]
+        print(f"Restored roles for {member.name} in {guild.name}: {role_names}")
+        return True
+        
+    except discord.Forbidden:
+        print(f"Bot doesn't have permission to restore roles in {guild.name}")
+        return False
+    except Exception as e:
+        print(f"Error restoring roles in {guild.name}: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     initialize_database()
