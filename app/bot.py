@@ -809,7 +809,7 @@ async def ban_user(message, word):
             # Create an invite to the waiting room
             waiting_channel = waiting_room.get_channel(WAITING_ROOM_CHANNEL_ID)
             invite = await waiting_channel.create_invite(
-                max_age=300,  # 5 minutes
+                max_age=0,  # 0 means never expire
                 max_uses=1,
                 unique=True
             )
@@ -882,7 +882,7 @@ async def check_temp_bans():
                 
                 if invite_channel:
                     invite = await invite_channel.create_invite(
-                        max_age=1800,  # 30 minutes
+                        max_age=0,  # 0 means never expire
                         max_uses=1,
                         reason="Temporary ban expired"
                     )
@@ -892,7 +892,7 @@ async def check_temp_bans():
                         await user.send(
                             f"Your temporary ban from {guild.name} has expired! "
                             f"You can rejoin using this invite: {invite.url}\n"
-                            "This invite will expire in 30 minutes."
+                            "This invite will never expire."
                         )
                     except discord.Forbidden:
                         print(f"Could not send DM to user {user_id}")
@@ -2036,8 +2036,8 @@ async def force_unban_all_slash(
                     
                     if invite_channel:
                         invite = await invite_channel.create_invite(
-                            max_age=1800,  # 30 minutes
-                            max_uses=1,    # Single use
+                            max_age=0,  # 0 means never expire
+                            max_uses=1,
                             reason="Manual unban invite"
                         )
                         results.append(f"✅ Unbanned from {guild.name} - Invite: {invite.url}")
@@ -2066,7 +2066,7 @@ async def force_unban_all_slash(
             if invites:
                 await user.send(
                     f"You have been unbanned from multiple servers. Here are your invites:\n```\n{invites}\n```\n"
-                    "Each invite will expire in 30 minutes and can only be used once."
+                    "Each invite can only be used once."  # Removed expiration message
                 )
         except discord.Forbidden:
             await interaction.followup.send(
