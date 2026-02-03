@@ -162,5 +162,3 @@ test.py
 app\data\bot.log
 app/data/bot.log
 app/main.py
-app/cogs
-app/cogs
