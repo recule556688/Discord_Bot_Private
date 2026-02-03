@@ -69,7 +69,7 @@ class Dm(commands.Cog):
                     await asyncio.sleep(0.5)
                 except discord.Forbidden:
                     await interaction.edit_original_response(
-                        content=f"Failed to send a DM to {user.name}. They might have DMs disabled or the bot doesn't share a server with them.",
+                        content=f"Failed to send a DM to {user.name}. They might have DMs disabled or the bot doesn't share a server with them or they are not in the server.",
                     )
                     return
                 except discord.HTTPException:
