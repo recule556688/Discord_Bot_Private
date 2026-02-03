@@ -1,4 +1,5 @@
 discord==1.7.3
+aiohttp
 python-dotenv==0.19.1
 requests==2.26.0
 pycryptodome==3.19.1
