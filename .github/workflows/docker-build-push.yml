@@ -3,7 +3,9 @@ name: Build and Push Docker Image
 on:
   push:
     paths:
-      - 'app/bot.py'
+      - 'app/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
